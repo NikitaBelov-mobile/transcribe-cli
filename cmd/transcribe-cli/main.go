@@ -80,6 +80,7 @@ func runDaemon(cfg app.Config, args []string) error {
 
 	fmt.Printf("Transcribe daemon is running at http://%s\n", cfg.Addr)
 	fmt.Printf("State: %s\n", cfg.StateDir)
+	fmt.Printf("Default model: %s\n", cfg.DefaultModel)
 	return daemon.Run(ctx)
 }
 
@@ -91,32 +92,27 @@ func runQueue(cfg app.Config, args []string) error {
 
 	switch args[0] {
 	case "add":
-		fs := flag.NewFlagSet("queue add", flag.ContinueOnError)
-		language := fs.String("lang", "auto", "language code (or auto)")
-		model := fs.String("model", "ggml-base", "model name or absolute model path")
-		outputDir := fs.String("output-dir", "", "output directory for txt/srt/vtt")
-		if err := fs.Parse(args[1:]); err != nil {
-			return err
-		}
-		rest := fs.Args()
-		if len(rest) != 1 {
-			return errors.New("usage: transcribe queue add <file> [--lang ru] [--model ggml-base]")
-		}
-		filePath, err := filepath.Abs(rest[0])
+		fileArg, language, model, outputDir, err := parseQueueAddArgs(args[1:], cfg.DefaultModel)
 		if err != nil {
 			return err
 		}
+		filePath, err := filepath.Abs(fileArg)
+		if err != nil {
+			return err
+		}
+
 		job, err := client.AddJob(app.AddJobRequest{
 			FilePath:  filePath,
-			OutputDir: strings.TrimSpace(*outputDir),
-			Language:  strings.TrimSpace(*language),
-			Model:     strings.TrimSpace(*model),
+			OutputDir: outputDir,
+			Language:  language,
+			Model:     model,
 		})
 		if err != nil {
 			return err
 		}
 		fmt.Printf("Queued: %s\n", job.ID)
 		fmt.Printf("Status: %s (%d%%)\n", job.Status, job.Progress)
+		fmt.Printf("Model: %s\n", job.Model)
 		return nil
 
 	case "list":
@@ -131,9 +127,9 @@ func runQueue(cfg app.Config, args []string) error {
 		sort.Slice(jobs, func(i, j int) bool {
 			return jobs[i].CreatedAt.After(jobs[j].CreatedAt)
 		})
-		fmt.Println("ID\tSTATUS\tPROGRESS\tFILE")
+		fmt.Println("ID\tSTATUS\tPROGRESS\tMODEL\tFILE")
 		for _, job := range jobs {
-			fmt.Printf("%s\t%s\t%d%%\t%s\n", job.ID, job.Status, job.Progress, job.FilePath)
+			fmt.Printf("%s\t%s\t%d%%\t%s\t%s\n", job.ID, job.Status, job.Progress, job.Model, job.FilePath)
 		}
 		return nil
 
@@ -186,9 +182,84 @@ func runQueue(cfg app.Config, args []string) error {
 	}
 }
 
+func parseQueueAddArgs(args []string, defaultModel string) (filePath string, language string, model string, outputDir string, err error) {
+	language = "auto"
+	model = strings.TrimSpace(defaultModel)
+	if model == "" {
+		model = "ggml-base"
+	}
+
+	readValue := func(current string, i *int) (string, error) {
+		if strings.Contains(current, "=") {
+			parts := strings.SplitN(current, "=", 2)
+			return strings.TrimSpace(parts[1]), nil
+		}
+		if *i+1 >= len(args) {
+			return "", fmt.Errorf("missing value for %s", current)
+		}
+		*i = *i + 1
+		return strings.TrimSpace(args[*i]), nil
+	}
+
+	for i := 0; i < len(args); i++ {
+		token := strings.TrimSpace(args[i])
+		switch {
+		case token == "--lang" || token == "-l" || strings.HasPrefix(token, "--lang="):
+			value, parseErr := readValue(token, &i)
+			if parseErr != nil {
+				return "", "", "", "", parseErr
+			}
+			language = value
+		case token == "--model" || token == "-m" || strings.HasPrefix(token, "--model="):
+			value, parseErr := readValue(token, &i)
+			if parseErr != nil {
+				return "", "", "", "", parseErr
+			}
+			model = value
+		case token == "--output-dir" || token == "-o" || strings.HasPrefix(token, "--output-dir="):
+			value, parseErr := readValue(token, &i)
+			if parseErr != nil {
+				return "", "", "", "", parseErr
+			}
+			outputDir = value
+		case strings.HasPrefix(token, "-"):
+			return "", "", "", "", fmt.Errorf("unknown flag: %s", token)
+		default:
+			if filePath != "" {
+				return "", "", "", "", errors.New("only one input file is allowed")
+			}
+			filePath = token
+		}
+	}
+
+	if filePath == "" {
+		return "", "", "", "", errors.New("usage: transcribe queue add [--lang ru] [--model ggml-base] [--output-dir ./out] <file>")
+	}
+	language = strings.TrimSpace(language)
+	if language == "" {
+		language = "auto"
+	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = cfgSafeDefaultModel(defaultModel)
+	}
+	if !filepath.IsAbs(model) && !strings.ContainsRune(model, os.PathSeparator) {
+		model = app.CanonicalModelName(model)
+	}
+	return filePath, language, model, strings.TrimSpace(outputDir), nil
+}
+
+func cfgSafeDefaultModel(defaultModel string) string {
+	defaultModel = strings.TrimSpace(defaultModel)
+	if defaultModel == "" {
+		return "ggml-base"
+	}
+	return app.CanonicalModelName(defaultModel)
+}
+
 func runModel(cfg app.Config, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: transcribe model <list|install|remove>")
+		return errors.New("usage: transcribe model <list|presets|current|use|install|remove>")
 	}
 
 	switch args[0] {
@@ -197,9 +268,16 @@ func runModel(cfg app.Config, args []string) error {
 		if err != nil {
 			return err
 		}
+		fmt.Printf("Default model: %s\n", cfg.DefaultModel)
+		if path, err := app.ResolveModelPath(cfg, ""); err == nil {
+			fmt.Printf("Default path: %s\n", path)
+		} else {
+			fmt.Printf("Default status: %v\n", err)
+		}
 		if len(models) == 0 {
 			fmt.Println("No local models installed.")
-			fmt.Println("Use: transcribe model install --name base")
+			fmt.Println("Use: transcribe model presets")
+			fmt.Println("Then: transcribe model install --name ggml-base")
 			return nil
 		}
 		fmt.Println("NAME\tSIZE\tPATH")
@@ -208,9 +286,61 @@ func runModel(cfg app.Config, args []string) error {
 		}
 		return nil
 
+	case "presets":
+		fmt.Println("Available preset models:")
+		fmt.Println("ALIAS\tCANONICAL\tINSTALL COMMAND")
+		for _, preset := range app.ListPresetModels() {
+			fmt.Printf("%s\t%s\ttranscribe model install --name %s\n", preset.Alias, preset.Name, preset.Name)
+		}
+		fmt.Println("You can also use aliases (base/small/medium/large).")
+		return nil
+
+	case "current":
+		fmt.Printf("Default model: %s\n", cfg.DefaultModel)
+		path, err := app.ResolveModelPath(cfg, "")
+		if err != nil {
+			fmt.Printf("Status: missing (%v)\n", err)
+			fmt.Printf("Fix: transcribe model install --name %s\n", app.CanonicalModelName(cfg.DefaultModel))
+			return nil
+		}
+		fmt.Printf("Resolved path: %s\n", path)
+		return nil
+
+	case "use":
+		if len(args) < 2 {
+			return errors.New("usage: transcribe model use <name-or-absolute-path>")
+		}
+		selected := strings.TrimSpace(args[1])
+		if selected == "" {
+			return errors.New("model name is required")
+		}
+		if !filepath.IsAbs(selected) && !strings.ContainsRune(selected, os.PathSeparator) {
+			selected = app.CanonicalModelName(selected)
+		}
+
+		settings, err := app.LoadSettings(cfg.SettingsFile)
+		if err != nil {
+			return err
+		}
+		settings.DefaultModel = selected
+		if err := app.SaveSettings(cfg.SettingsFile, settings); err != nil {
+			return err
+		}
+
+		fmt.Printf("Default model saved: %s\n", selected)
+		tempCfg := cfg
+		tempCfg.DefaultModel = selected
+		if path, err := app.ResolveModelPath(tempCfg, ""); err != nil {
+			fmt.Printf("Status: missing (%v)\n", err)
+			fmt.Println("Install it with: transcribe model install --name <model>")
+		} else {
+			fmt.Printf("Resolved path: %s\n", path)
+		}
+		return nil
+
 	case "install":
 		fs := flag.NewFlagSet("model install", flag.ContinueOnError)
-		name := fs.String("name", "base", "model name (preset: tiny|base|small|medium|large)")
+		name := fs.String("name", cfg.DefaultModel, "model name (preset alias or canonical ggml-*)")
 		url := fs.String("url", "", "optional direct URL for model .bin")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
@@ -229,7 +359,7 @@ func runModel(cfg app.Config, args []string) error {
 		if err := app.RemoveModel(cfg, args[1]); err != nil {
 			return err
 		}
-		fmt.Printf("Removed model: %s\n", args[1])
+		fmt.Printf("Removed model: %s\n", app.CanonicalModelName(args[1]))
 		return nil
 
 	default:
@@ -242,8 +372,10 @@ func runSetup(cfg app.Config) error {
 		return err
 	}
 	fmt.Printf("State directory: %s\n", cfg.StateDir)
+	fmt.Printf("Settings file: %s\n", cfg.SettingsFile)
 	fmt.Printf("Models directory: %s\n", cfg.ModelsDir)
 	fmt.Printf("Daemon address: %s\n", cfg.Addr)
+	fmt.Printf("Default model: %s\n", cfg.DefaultModel)
 	fmt.Println("Setup complete.")
 	return nil
 }
@@ -254,7 +386,14 @@ func runDoctor(cfg app.Config) error {
 	}
 	fmt.Printf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 	fmt.Printf("State: %s\n", cfg.StateDir)
+	fmt.Printf("Settings: %s\n", cfg.SettingsFile)
 	fmt.Printf("Models: %s\n", cfg.ModelsDir)
+	fmt.Printf("Default model: %s\n", cfg.DefaultModel)
+	if path, err := app.ResolveModelPath(cfg, ""); err != nil {
+		fmt.Printf("default model: missing (%v)\n", err)
+	} else {
+		fmt.Printf("default model path: %s\n", path)
+	}
 
 	checkBinary(cfg.FFmpegBinary, "ffmpeg")
 	checkBinary(cfg.WhisperBinary, "whisper")
@@ -262,6 +401,7 @@ func runDoctor(cfg app.Config) error {
 	client := app.NewClient(cfg.ClientBaseURL)
 	if err := client.Health(); err != nil {
 		fmt.Printf("daemon: not reachable (%v)\n", err)
+		fmt.Println("hint: start it with `transcribe daemon run`")
 		return nil
 	}
 	fmt.Println("daemon: healthy")
@@ -342,11 +482,14 @@ Commands:
   doctor                          Check local dependencies and daemon health
   daemon run                      Start local queue daemon
 
-  model list                      List installed models
+  model list                      List installed local models
+  model presets                   Show known downloadable model presets
+  model current                   Show current default model and status
+  model use <name|path>           Set default model in config
   model install --name base       Download model preset
   model remove <name>             Remove model
 
-  queue add <file> [flags]        Add audio/video file to queue
+  queue add [flags] <file>        Add audio/video file to queue
   queue list                      Show queue jobs
   queue status <job-id>           Show detailed job JSON
   queue watch <job-id>            Poll job progress until done
@@ -357,6 +500,7 @@ Environment variables:
   TRANSCRIBE_CLI_ADDR             Daemon listen address (default 127.0.0.1:9864)
   TRANSCRIBE_CLI_STATE_DIR        State directory (default OS user config dir)
   TRANSCRIBE_CLI_MODELS_DIR       Models directory
+  TRANSCRIBE_CLI_DEFAULT_MODEL    Default model (overrides saved config)
   TRANSCRIBE_CLI_FFMPEG           ffmpeg binary name/path
   TRANSCRIBE_CLI_WHISPER          whisper-cli binary name/path
 `)

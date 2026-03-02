@@ -162,7 +162,7 @@ func (d *Daemon) handleAddJob(w http.ResponseWriter, r *http.Request) {
 	}
 	model := strings.TrimSpace(req.Model)
 	if model == "" {
-		model = "ggml-base"
+		model = d.cfg.DefaultModel
 	}
 	outputDir := strings.TrimSpace(req.OutputDir)
 	if outputDir == "" {

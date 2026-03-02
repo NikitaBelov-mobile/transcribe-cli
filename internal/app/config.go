@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 // Config defines runtime settings for the CLI and local daemon.
@@ -14,7 +15,9 @@ type Config struct {
 	QueueSize     int
 	StateDir      string
 	JobsFile      string
+	SettingsFile  string
 	ModelsDir     string
+	DefaultModel  string
 	FFmpegBinary  string
 	WhisperBinary string
 	ClientBaseURL string
@@ -22,15 +25,29 @@ type Config struct {
 
 func LoadConfig() Config {
 	stateDir := getEnv("TRANSCRIBE_CLI_STATE_DIR", defaultStateDir())
+	settingsFile := filepath.Join(stateDir, "config.json")
 	modelsDir := filepath.Join(stateDir, "models")
 	addr := getEnv("TRANSCRIBE_CLI_ADDR", "127.0.0.1:9864")
+
+	defaultModel := strings.TrimSpace(getEnv("TRANSCRIBE_CLI_DEFAULT_MODEL", ""))
+	if defaultModel == "" {
+		if settings, err := LoadSettings(settingsFile); err == nil && strings.TrimSpace(settings.DefaultModel) != "" {
+			defaultModel = settings.DefaultModel
+		}
+	}
+	if defaultModel == "" {
+		defaultModel = "ggml-base"
+	}
+
 	cfg := Config{
 		Addr:          addr,
 		Workers:       getEnvInt("TRANSCRIBE_CLI_WORKERS", max(1, runtime.NumCPU()/2)),
 		QueueSize:     getEnvInt("TRANSCRIBE_CLI_QUEUE_SIZE", max(8, runtime.NumCPU()*2)),
 		StateDir:      stateDir,
 		JobsFile:      filepath.Join(stateDir, "jobs.json"),
+		SettingsFile:  settingsFile,
 		ModelsDir:     getEnv("TRANSCRIBE_CLI_MODELS_DIR", modelsDir),
+		DefaultModel:  CanonicalModelName(defaultModel),
 		FFmpegBinary:  getEnv("TRANSCRIBE_CLI_FFMPEG", "ffmpeg"),
 		WhisperBinary: getEnv("TRANSCRIBE_CLI_WHISPER", "whisper-cli"),
 		ClientBaseURL: "http://" + addr,

@@ -11,13 +11,66 @@ import (
 	"time"
 )
 
-// PresetModels maps shortcut names to public ggml model URLs.
-var PresetModels = map[string]string{
-	"tiny":   "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
-	"base":   "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
-	"small":  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
-	"medium": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
-	"large":  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin",
+// PresetModel defines a known downloadable whisper model.
+type PresetModel struct {
+	Alias string
+	Name  string
+	URL   string
+}
+
+var presetModels = []PresetModel{
+	{Alias: "tiny", Name: "ggml-tiny", URL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"},
+	{Alias: "base", Name: "ggml-base", URL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"},
+	{Alias: "small", Name: "ggml-small", URL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"},
+	{Alias: "medium", Name: "ggml-medium", URL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin"},
+	{Alias: "large", Name: "ggml-large-v3", URL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"},
+}
+
+var presetIndex = buildPresetIndex()
+
+func buildPresetIndex() map[string]PresetModel {
+	index := make(map[string]PresetModel, len(presetModels)*2)
+	for _, preset := range presetModels {
+		index[strings.ToLower(preset.Alias)] = preset
+		index[strings.ToLower(preset.Name)] = preset
+	}
+	index["large-v3"] = presetIndexValue("large")
+	return index
+}
+
+func presetIndexValue(key string) PresetModel {
+	for _, preset := range presetModels {
+		if preset.Alias == key {
+			return preset
+		}
+	}
+	return PresetModel{}
+}
+
+func ListPresetModels() []PresetModel {
+	out := append([]PresetModel(nil), presetModels...)
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Alias < out[j].Alias
+	})
+	return out
+}
+
+func LookupPresetModel(name string) (PresetModel, bool) {
+	name = strings.ToLower(strings.TrimSpace(strings.TrimSuffix(name, ".bin")))
+	preset, ok := presetIndex[name]
+	return preset, ok
+}
+
+// CanonicalModelName normalizes aliases to ggml-* model names.
+func CanonicalModelName(name string) string {
+	name = strings.TrimSpace(strings.TrimSuffix(name, ".bin"))
+	if name == "" {
+		return ""
+	}
+	if preset, ok := LookupPresetModel(name); ok {
+		return preset.Name
+	}
+	return name
 }
 
 // ModelInfo describes a downloaded local model.
@@ -67,19 +120,26 @@ func InstallModel(cfg Config, name, url string, out io.Writer) (string, error) {
 	if err := EnsureStateDirs(cfg); err != nil {
 		return "", err
 	}
-	name = normalizeModelName(name)
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", fmt.Errorf("model name is required")
 	}
+
+	canonical := CanonicalModelName(name)
+	if canonical == "" {
+		return "", fmt.Errorf("model name is required")
+	}
+
 	if strings.TrimSpace(url) == "" {
-		if presetURL, ok := PresetModels[name]; ok {
-			url = presetURL
+		if preset, ok := LookupPresetModel(canonical); ok {
+			url = preset.URL
+			canonical = preset.Name
 		} else {
-			return "", fmt.Errorf("URL is required for non-preset model")
+			return "", fmt.Errorf("unknown preset model %q; use `transcribe model presets` or provide --url", name)
 		}
 	}
 
-	finalPath := filepath.Join(cfg.ModelsDir, name+".bin")
+	finalPath := filepath.Join(cfg.ModelsDir, canonical+".bin")
 	tmpPath := finalPath + ".part"
 
 	resp, err := http.Get(url)
@@ -116,7 +176,7 @@ func InstallModel(cfg Config, name, url string, out io.Writer) (string, error) {
 }
 
 func RemoveModel(cfg Config, name string) error {
-	name = normalizeModelName(name)
+	name = CanonicalModelName(name)
 	if name == "" {
 		return fmt.Errorf("model name is required")
 	}
@@ -127,10 +187,28 @@ func RemoveModel(cfg Config, name string) error {
 	return nil
 }
 
-func normalizeModelName(name string) string {
-	name = strings.TrimSpace(name)
-	name = strings.TrimSuffix(name, ".bin")
-	return name
+func ResolveModelPath(cfg Config, model string) (string, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = cfg.DefaultModel
+	}
+	if model == "" {
+		model = "ggml-base"
+	}
+
+	if filepath.IsAbs(model) || strings.ContainsRune(model, os.PathSeparator) {
+		if _, err := os.Stat(model); err != nil {
+			return "", fmt.Errorf("model not found: %s", model)
+		}
+		return model, nil
+	}
+
+	canonical := CanonicalModelName(model)
+	path := filepath.Join(cfg.ModelsDir, canonical+".bin")
+	if _, err := os.Stat(path); err != nil {
+		return "", fmt.Errorf("model not found: %s (install with: transcribe model install --name %s)", path, canonical)
+	}
+	return path, nil
 }
 
 type progressWriter struct {

@@ -6,6 +6,7 @@ Offline CLI tool for audio/video transcription on macOS and Windows.
 - Queue-based processing through a local daemon
 - Progress checks via `queue status` and `queue watch`
 - Queue control via `queue cancel` and `queue retry`
+- Model management via `model presets/current/use/install/remove`
 - Outputs: `txt`, `srt`, `vtt`
 
 ## Requirements
@@ -40,38 +41,55 @@ Planned package channels:
 transcribe setup
 ```
 
-2. Install a model:
+2. See available preset models:
 
 ```bash
-transcribe model install --name base
+transcribe model presets
 ```
 
-3. Start daemon in terminal #1:
+3. Install a model:
+
+```bash
+transcribe model install --name ggml-base
+```
+
+Aliases like `base`, `small`, `medium`, `large` are also supported.
+
+4. (Optional) set default model:
+
+```bash
+transcribe model use ggml-base
+transcribe model current
+```
+
+5. Start daemon in terminal #1:
 
 ```bash
 transcribe daemon run
 ```
 
-4. Queue file in terminal #2:
+6. Queue file in terminal #2 (flags can be before or after file path):
 
 ```bash
+transcribe queue add --lang ru --model ggml-base ./sample.mp4
+# also works:
 transcribe queue add ./sample.mp4 --lang ru --model ggml-base
 ```
 
-5. Watch progress:
+7. Watch progress:
 
 ```bash
 transcribe queue watch <job-id>
 ```
 
-6. Cancel or retry a job:
+8. Cancel or retry a job:
 
 ```bash
 transcribe queue cancel <job-id>
 transcribe queue retry <job-id>
 ```
 
-7. List all jobs:
+9. List all jobs:
 
 ```bash
 transcribe queue list
@@ -86,11 +104,14 @@ transcribe doctor
 transcribe daemon run [--addr 127.0.0.1:9864] [--workers 4] [--queue-size 16]
 
 transcribe model list
-transcribe model install --name base
+transcribe model presets
+transcribe model current
+transcribe model use ggml-base
+transcribe model install --name ggml-base
 transcribe model install --name my-custom --url https://example.com/model.bin
-transcribe model remove base
+transcribe model remove ggml-base
 
-transcribe queue add ./video.mp4 --lang auto --model ggml-base --output-dir ./out
+transcribe queue add [--lang auto] [--model ggml-base] [--output-dir ./out] <file>
 transcribe queue list
 transcribe queue status <job-id>
 transcribe queue watch <job-id> --interval 2s
@@ -105,9 +126,25 @@ Models are stored in:
 - macOS: `~/Library/Application Support/TranscribeCLI/models`
 - Windows: `%AppData%\\TranscribeCLI\\models`
 
-By default, a model name resolves to `<models-dir>/<name>.bin`.
+Canonical model names are `ggml-*` (for example `ggml-base`).
+
+Preset aliases:
+
+- `tiny` -> `ggml-tiny`
+- `base` -> `ggml-base`
+- `small` -> `ggml-small`
+- `medium` -> `ggml-medium`
+- `large` -> `ggml-large-v3`
+
+By default, model names resolve to `<models-dir>/<name>.bin`.
 
 You can also pass an absolute model file path in `--model`.
+
+Default model is read in this order:
+
+1. `TRANSCRIBE_CLI_DEFAULT_MODEL` environment variable
+2. saved config in `<state-dir>/config.json`
+3. fallback: `ggml-base`
 
 ## How progress works
 
@@ -135,9 +172,10 @@ Default output directory is the source file directory, override with `--output-d
 
 - `TRANSCRIBE_CLI_ADDR` (default `127.0.0.1:9864`)
 - `TRANSCRIBE_CLI_STATE_DIR` (default OS user config dir)
+- `TRANSCRIBE_CLI_MODELS_DIR`
+- `TRANSCRIBE_CLI_DEFAULT_MODEL`
 - `TRANSCRIBE_CLI_WORKERS`
 - `TRANSCRIBE_CLI_QUEUE_SIZE`
-- `TRANSCRIBE_CLI_MODELS_DIR`
 - `TRANSCRIBE_CLI_FFMPEG` (default `ffmpeg`)
 - `TRANSCRIBE_CLI_WHISPER` (default `whisper-cli`)
 
