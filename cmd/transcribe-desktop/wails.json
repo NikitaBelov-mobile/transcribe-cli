@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Transcribe",
+  "outputfilename": "transcribe-desktop",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "assetdir": "frontend/dist",
+  "author": {
+    "name": "NikitaBelov-mobile",
+    "email": ""
+  }
+}

@@ -10,6 +10,7 @@ Offline transcription app (CLI + local GUI) for macOS and Windows.
 - Advanced queue mode with progress/cancel/retry
 - Model management via `model presets/current/use/install/remove`
 - Outputs: `txt`, `srt`, `vtt`
+- Optional desktop shell (Wails, no browser window)
 
 ## Requirements
 
@@ -70,6 +71,31 @@ UI opens on `http://127.0.0.1:9864/` (or your configured address) where you can:
 - download `txt/srt/vtt` results
 - monitor onboarding and update status
 - trigger manual update check from GUI
+
+## Desktop shell mode (Wails)
+
+If you want a true desktop window (without opening browser tabs), use `cmd/transcribe-desktop`.
+
+Prerequisites:
+
+- Go 1.23+
+- Wails CLI installed (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`)
+- Platform-specific Wails deps (WebView2 on Windows)
+
+Build/run:
+
+```bash
+# from repo root
+go get github.com/wailsapp/wails/v2@latest
+go get github.com/wailsapp/wails/v2/pkg/...@latest
+go run -tags desktop ./cmd/transcribe-desktop
+```
+
+Or with Wails:
+
+```bash
+wails build -tags desktop -platform windows/amd64
+```
 
 ## Advanced queue flow
 
