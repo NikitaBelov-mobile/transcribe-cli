@@ -35,6 +35,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify required artifacts
+        run: |
+          set -euo pipefail
+          ls -la dist
+          ls dist/*_darwin_amd64.zip
+          ls dist/*_darwin_arm64.zip
+          ls dist/*_windows_amd64.zip
+          ls dist/*_windows_arm64.zip
+
       - name: Update Homebrew tap
         if: ${{ env.HOMEBREW_TAP_TOKEN != '' && env.HOMEBREW_TAP_REPO != '' && env.RELEASE_REPO != '' }}
         env:
