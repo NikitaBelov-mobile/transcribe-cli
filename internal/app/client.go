@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,6 +36,19 @@ func (c *Client) Health() error {
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("daemon returned HTTP %d", resp.StatusCode)
+	}
+	var payload struct {
+		Status  string `json:"status"`
+		Service string `json:"service"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return fmt.Errorf("invalid health payload: %w", err)
+	}
+	if payload.Status != "ok" {
+		return errors.New("daemon health status is not ok")
+	}
+	if strings.TrimSpace(payload.Service) != "transcribe-cli" {
+		return fmt.Errorf("unexpected health service: %q", payload.Service)
 	}
 	return nil
 }

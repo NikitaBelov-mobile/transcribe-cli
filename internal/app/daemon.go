@@ -154,7 +154,12 @@ func (d *Daemon) enqueuePending(ctx context.Context) {
 }
 
 func (d *Daemon) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	cfg := d.currentConfig()
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"service": "transcribe-cli",
+		"version": cfg.AppVersion,
+	})
 }
 
 func (d *Daemon) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) {

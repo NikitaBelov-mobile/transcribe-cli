@@ -6,12 +6,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -178,16 +180,19 @@ func runRun(cfg app.Config, args []string) error {
 		return err
 	}
 
-	stopDaemon, startedDaemon, err := ensureDaemonRunning(cfg)
+	stopDaemon, startedDaemon, runtimeCfg, err := ensureDaemonRunning(cfg)
 	if err != nil {
 		return err
 	}
 	if startedDaemon {
 		fmt.Println("Daemon was not running, started temporary local daemon.")
+		if runtimeCfg.Addr != cfg.Addr {
+			fmt.Printf("Default port %s is busy, using %s.\n", cfg.Addr, runtimeCfg.Addr)
+		}
 	}
 	defer stopDaemon()
 
-	client := app.NewClient(cfg.ClientBaseURL)
+	client := app.NewClient(runtimeCfg.ClientBaseURL)
 	job, err := client.AddJob(app.AddJobRequest{
 		FilePath:  filePath,
 		OutputDir: outputDir,
@@ -215,12 +220,12 @@ func runGUI(cfg app.Config, args []string) error {
 		return err
 	}
 
-	stopDaemon, startedDaemon, err := ensureDaemonRunning(cfg)
+	stopDaemon, startedDaemon, runtimeCfg, err := ensureDaemonRunning(cfg)
 	if err != nil {
 		return err
 	}
 
-	uiURL := cfg.ClientBaseURL + "/"
+	uiURL := runtimeCfg.ClientBaseURL + "/"
 	fmt.Printf("GUI URL: %s\n", uiURL)
 	if *openBrowser {
 		if err := openURL(uiURL); err != nil {
@@ -233,6 +238,9 @@ func runGUI(cfg app.Config, args []string) error {
 		fmt.Println("Daemon is already running. Press Ctrl+C to exit.")
 	} else {
 		fmt.Println("Started local daemon for GUI. Press Ctrl+C to stop.")
+		if runtimeCfg.Addr != cfg.Addr {
+			fmt.Printf("Default port %s is busy, daemon started on %s.\n", cfg.Addr, runtimeCfg.Addr)
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -453,15 +461,36 @@ func parseRunArgs(args []string, defaultModel string) (filePath string, language
 	return filePath, language, model, outputDir, watch, watchInterval, err
 }
 
-func ensureDaemonRunning(cfg app.Config) (stop func(), started bool, err error) {
+func ensureDaemonRunning(cfg app.Config) (stop func(), started bool, runtimeCfg app.Config, err error) {
 	client := app.NewClient(cfg.ClientBaseURL)
 	if err := client.Health(); err == nil {
-		return func() {}, false, nil
+		return func() {}, false, cfg, nil
 	}
 
+	candidate := cfg
+	const maxAddressAttempts = 10
+	for i := 0; i < maxAddressAttempts; i++ {
+		stopFn, startErr := startDaemonProcess(candidate)
+		if startErr == nil {
+			return stopFn, true, candidate, nil
+		}
+		if !isAddressInUseError(startErr) {
+			return nil, false, candidate, startErr
+		}
+		nextAddr, addrErr := bumpPort(candidate.Addr, 1)
+		if addrErr != nil {
+			return nil, false, candidate, fmt.Errorf("failed to pick fallback address after %s: %w", candidate.Addr, startErr)
+		}
+		candidate.Addr = nextAddr
+		candidate.ClientBaseURL = "http://" + nextAddr
+	}
+	return nil, false, candidate, errors.New("failed to start daemon on fallback ports")
+}
+
+func startDaemonProcess(cfg app.Config) (func(), error) {
 	daemon, err := app.NewDaemon(cfg)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -470,15 +499,16 @@ func ensureDaemonRunning(cfg app.Config) (stop func(), started bool, err error) 
 		errCh <- daemon.Run(ctx)
 	}()
 
+	client := app.NewClient(cfg.ClientBaseURL)
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		select {
 		case runErr := <-errCh:
 			cancel()
 			if runErr == nil {
-				return nil, false, errors.New("daemon exited unexpectedly")
+				return nil, errors.New("daemon exited unexpectedly")
 			}
-			return nil, false, fmt.Errorf("failed to start daemon: %w", runErr)
+			return nil, fmt.Errorf("failed to start daemon at %s: %w", cfg.Addr, runErr)
 		default:
 		}
 
@@ -489,7 +519,7 @@ func ensureDaemonRunning(cfg app.Config) (stop func(), started bool, err error) 
 				case <-time.After(500 * time.Millisecond):
 				case <-errCh:
 				}
-			}, true, nil
+			}, nil
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
@@ -498,11 +528,36 @@ func ensureDaemonRunning(cfg app.Config) (stop func(), started bool, err error) 
 	select {
 	case runErr := <-errCh:
 		if runErr != nil {
-			return nil, false, fmt.Errorf("failed to start daemon: %w", runErr)
+			return nil, fmt.Errorf("failed to start daemon at %s: %w", cfg.Addr, runErr)
 		}
 	default:
 	}
-	return nil, false, errors.New("timed out waiting for daemon to start")
+	return nil, fmt.Errorf("timed out waiting for daemon to start at %s", cfg.Addr)
+}
+
+func isAddressInUseError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "address already in use") ||
+		strings.Contains(msg, "only one usage of each socket address")
+}
+
+func bumpPort(addr string, offset int) (string, error) {
+	host, portStr, err := net.SplitHostPort(strings.TrimSpace(addr))
+	if err != nil {
+		return "", err
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return "", err
+	}
+	port += offset
+	if port <= 0 || port > 65535 {
+		return "", fmt.Errorf("port out of range: %d", port)
+	}
+	return net.JoinHostPort(host, strconv.Itoa(port)), nil
 }
 
 func saveDefaultModel(cfg app.Config, model string) error {
