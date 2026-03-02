@@ -1,0 +1,140 @@
+using System;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace TranscribeDesktop;
+
+public sealed class TranscribeApiClient : IDisposable
+{
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    private readonly HttpClient _http;
+
+    public TranscribeApiClient(string baseUrl)
+    {
+        _http = new HttpClient
+        {
+            BaseAddress = new Uri(AppendSlash(baseUrl)),
+            Timeout = TimeSpan.FromSeconds(30),
+        };
+    }
+
+    public void Dispose() => _http.Dispose();
+
+    public Task<HealthResponse> HealthAsync(CancellationToken ct) => GetAsync<HealthResponse>("healthz", ct);
+
+    public Task<BootstrapStatus> GetBootstrapStatusAsync(CancellationToken ct) => GetAsync<BootstrapStatus>("v1/bootstrap/status", ct);
+
+    public Task EnsureBootstrapAsync(CancellationToken ct) => PostNoBodyAsync("v1/bootstrap/ensure", ct);
+
+    public Task<UpdateStatus> GetUpdateStatusAsync(CancellationToken ct) => GetAsync<UpdateStatus>("v1/update/status", ct);
+
+    public Task CheckUpdatesAsync(CancellationToken ct) => PostNoBodyAsync("v1/update/check", ct);
+
+    public Task<ModelsResponse> GetModelsAsync(CancellationToken ct) => GetAsync<ModelsResponse>("v1/models", ct);
+
+    public Task<PresetsResponse> GetPresetsAsync(CancellationToken ct) => GetAsync<PresetsResponse>("v1/models/presets", ct);
+
+    public Task SetDefaultModelAsync(string model, CancellationToken ct) => PostJsonAsync("v1/models/use", new ModelUseRequest { Name = model }, ct);
+
+    public Task InstallModelAsync(string modelPresetName, CancellationToken ct) => PostJsonAsync("v1/models/install", new ModelInstallRequest { Name = modelPresetName }, ct);
+
+    public Task<JobsResponse> GetJobsAsync(CancellationToken ct) => GetAsync<JobsResponse>("v1/jobs", ct);
+
+    public Task<JobDto> AddJobAsync(AddJobRequest request, CancellationToken ct) => PostJsonAsync<AddJobRequest, JobDto>("v1/jobs", request, ct);
+
+    public Task CancelJobAsync(string id, CancellationToken ct) => PostNoBodyAsync($"v1/jobs/{Uri.EscapeDataString(id)}/cancel", ct);
+
+    public Task RetryJobAsync(string id, CancellationToken ct) => PostNoBodyAsync($"v1/jobs/{Uri.EscapeDataString(id)}/retry", ct);
+
+    private async Task<T> GetAsync<T>(string path, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, path);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+        return await ReadOrThrowAsync<T>(res, ct).ConfigureAwait(false);
+    }
+
+    private async Task PostNoBodyAsync(string path, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, path);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(res, ct).ConfigureAwait(false);
+    }
+
+    private async Task PostJsonAsync<TReq>(string path, TReq body, CancellationToken ct)
+    {
+        using var res = await _http.PostAsJsonAsync(path, body, JsonOptions, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(res, ct).ConfigureAwait(false);
+    }
+
+    private async Task<TRes> PostJsonAsync<TReq, TRes>(string path, TReq body, CancellationToken ct)
+    {
+        using var res = await _http.PostAsJsonAsync(path, body, JsonOptions, ct).ConfigureAwait(false);
+        return await ReadOrThrowAsync<TRes>(res, ct).ConfigureAwait(false);
+    }
+
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        throw await BuildApiError(response, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<T> ReadOrThrowAsync<T>(HttpResponseMessage response, CancellationToken ct)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await BuildApiError(response, ct).ConfigureAwait(false);
+        }
+
+        var value = await response.Content.ReadFromJsonAsync<T>(JsonOptions, ct).ConfigureAwait(false);
+        if (value is null)
+        {
+            throw new InvalidOperationException("API returned empty response");
+        }
+        return value;
+    }
+
+    private static async Task<Exception> BuildApiError(HttpResponseMessage response, CancellationToken ct)
+    {
+        string raw = string.Empty;
+        try
+        {
+            raw = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            var payload = JsonSerializer.Deserialize<ApiErrorResponse>(raw, JsonOptions);
+            if (!string.IsNullOrWhiteSpace(payload?.Error))
+            {
+                return new InvalidOperationException(payload.Error);
+            }
+        }
+        catch
+        {
+            // ignore parse issues and return status-based error below.
+        }
+
+        var fallback = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            return new InvalidOperationException(raw);
+        }
+        return new InvalidOperationException(fallback);
+    }
+
+    private static string AppendSlash(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            throw new ArgumentException("Base URL is empty", nameof(url));
+        }
+        return url.EndsWith("/", StringComparison.Ordinal) ? url : url + "/";
+    }
+}

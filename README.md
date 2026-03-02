@@ -10,11 +10,12 @@ Offline transcription app (CLI + local GUI) for macOS and Windows.
 - Advanced queue mode with progress/cancel/retry
 - Model management via `model presets/current/use/install/remove`
 - Outputs: `txt`, `srt`, `vtt`
-- Optional desktop shell (Wails, no browser window)
+- Native Windows desktop app bundle (no browser dependency)
 
 ## Requirements
 
-- End user: only app binary (`transcribe` / `transcribe.exe`)
+- End user (Windows desktop): release bundle with `TranscribeDesktop.exe` + `transcribe.exe`
+- End user (CLI): only app binary (`transcribe` / `transcribe.exe`)
 - Build from source: Go 1.23+
 
 ## Install
@@ -28,10 +29,21 @@ go build -o transcribe ./cmd/transcribe-cli
 
 ### Option B: release binary
 
-Download from GitHub Releases and run binary.
-No manual setup is required for onboarding flow.
+Download artifacts from GitHub Releases.
+- Windows desktop users: `transcribe-desktop_<version>_windows_amd64.zip`
+- CLI users: `transcribe-cli_<version>_<os>_<arch>.zip`
 
 ## Easiest flow (recommended)
+
+### Windows desktop app
+
+1. Download `transcribe-desktop_<version>_windows_amd64.zip` from Releases.
+2. Extract archive.
+3. Run `TranscribeDesktop.exe`.
+
+Desktop app starts local daemon automatically, runs onboarding, lets user install model, queue files, and monitor progress in one native window.
+
+### CLI flow
 
 1. Start app:
 
@@ -50,16 +62,13 @@ transcribe run ./sample.mp4 --lang ru --model ggml-large-v3-turbo
 
 `run` waits for completion and prints output file paths.
 
-## GUI mode
+## GUI mode (CLI web UI)
 
 Start local UI:
 
 ```bash
 transcribe gui
 ```
-
-On Windows, app tries to open UI in app-window mode (`msedge/chrome --app=...`) first.
-Fallback is regular browser open.
 
 UI opens on `http://127.0.0.1:9864/` (or your configured address) where you can:
 
@@ -72,52 +81,23 @@ UI opens on `http://127.0.0.1:9864/` (or your configured address) where you can:
 - monitor onboarding and update status
 - trigger manual update check from GUI
 
-## Desktop shell mode (Wails)
+## Windows native desktop app
 
-If you want a true desktop window (without opening browser tabs), use `cmd/transcribe-desktop`.
+`TranscribeDesktop.exe` is a native WinForms app (not browser/WebView). It talks to local `transcribe.exe daemon` via localhost API.
 
-Prerequisites:
-
-- Go 1.23+
-- Wails CLI installed (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`)
-- Platform-specific Wails deps (WebView2 on Windows)
-
-Build/run:
-
-```bash
-# from repo root
-go get github.com/wailsapp/wails/v2@latest
-go get github.com/wailsapp/wails/v2/pkg/...@latest
-go run -tags "desktop,dev" ./cmd/transcribe-desktop
-```
-
-Or with Wails:
-
-```bash
-wails build -tags desktop -platform windows/amd64
-```
-
-Direct Go production build (desktop release-style):
-
-```bash
-go build -mod=mod -tags "desktop,production" -ldflags "-s -w -X main.version=vX.Y.Z -H=windowsgui" -o transcribe-desktop.exe ./cmd/transcribe-desktop
-```
-
-### How desktop mode works
-
-1. Desktop EXE starts an embedded local backend daemon (same API/queue/model logic as CLI mode).
-2. If default port `127.0.0.1:9864` is busy, app picks next free local port automatically.
-3. Wails window opens local UI inside desktop shell (no browser tab).
-4. Onboarding checks/downloads components (`ffmpeg`, `whisper-cli`, default model).
-5. Queue, progress, cancel/retry, results and updates work the same as GUI mode.
-6. Auto-update stages new binary and applies it on next launch.
+How it works:
+1. Desktop app launches `transcribe.exe daemon run --addr 127.0.0.1:9864` in background.
+2. Onboarding ensures `ffmpeg`, `whisper-cli`, and default model are installed.
+3. User adds audio/video files to queue in native GUI.
+4. Job list shows progress and supports cancel/retry.
+5. Update checks are available from GUI.
 
 ### Release artifacts
 
 Tag release now produces:
 
 - CLI: `transcribe-cli_<version>_windows_amd64.zip` (and other targets from GoReleaser)
-- Desktop: `transcribe-desktop_<version>_windows_amd64.zip` (Wails shell)
+- Desktop: `transcribe-desktop_<version>_windows_amd64.zip` (native Windows bundle)
 
 For end users who want app-like UX, distribute `transcribe-desktop_..._windows_amd64.zip`.
 

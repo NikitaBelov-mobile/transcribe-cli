@@ -74,17 +74,35 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build desktop executable
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build transcribe engine
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist-desktop
-          go build -mod=mod -tags "desktop,production" -ldflags "-s -w -X main.version=${GITHUB_REF_NAME} -H=windowsgui" -o dist-desktop/transcribe-desktop.exe ./cmd/transcribe-desktop
+          mkdir -p dist-desktop/bundle
+          go build -mod=mod -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o dist-desktop/bundle/transcribe.exe ./cmd/transcribe-cli
+
+      - name: Publish native desktop GUI (WinForms)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish desktop-windows/TranscribeDesktop.Windows.csproj \
+            -c Release \
+            -r win-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:Version=${GITHUB_REF_NAME#v} \
+            -o dist-desktop/publish
+          cp dist-desktop/publish/TranscribeDesktop.exe dist-desktop/bundle/TranscribeDesktop.exe
 
       - name: Pack desktop artifact
         shell: powershell
         run: |
-          Compress-Archive -Path dist-desktop/transcribe-desktop.exe -DestinationPath dist-desktop/transcribe-desktop_${{ github.ref_name }}_windows_amd64.zip
+          Compress-Archive -Path dist-desktop/bundle/* -DestinationPath dist-desktop/transcribe-desktop_${{ github.ref_name }}_windows_amd64.zip
 
       - name: Upload desktop artifact to release
         shell: bash
