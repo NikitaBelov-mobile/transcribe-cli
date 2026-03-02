@@ -11,6 +11,13 @@ permissions:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_REPO: ${{ vars.RELEASE_REPO }}
+      HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+      WINGET_REPO: ${{ vars.WINGET_REPO }}
+      WINGET_PACKAGE_ID: ${{ vars.WINGET_PACKAGE_ID }}
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      WINGET_REPO_TOKEN: ${{ secrets.WINGET_REPO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,11 +36,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update Homebrew tap
-        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' && vars.HOMEBREW_TAP_REPO != '' && vars.RELEASE_REPO != '' }}
+        if: ${{ env.HOMEBREW_TAP_TOKEN != '' && env.HOMEBREW_TAP_REPO != '' && env.RELEASE_REPO != '' }}
         env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
-          RELEASE_REPO: ${{ vars.RELEASE_REPO }}
           GIT_AUTHOR_NAME: github-actions[bot]
           GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
           GIT_COMMITTER_NAME: github-actions[bot]
@@ -42,12 +46,8 @@ jobs:
           bash scripts/release/update-homebrew-tap.sh
 
       - name: Update Winget manifests repo
-        if: ${{ secrets.WINGET_REPO_TOKEN != '' && vars.WINGET_REPO != '' && vars.RELEASE_REPO != '' && vars.WINGET_PACKAGE_ID != '' }}
+        if: ${{ env.WINGET_REPO_TOKEN != '' && env.WINGET_REPO != '' && env.RELEASE_REPO != '' && env.WINGET_PACKAGE_ID != '' }}
         env:
-          WINGET_REPO_TOKEN: ${{ secrets.WINGET_REPO_TOKEN }}
-          WINGET_REPO: ${{ vars.WINGET_REPO }}
-          WINGET_PACKAGE_ID: ${{ vars.WINGET_PACKAGE_ID }}
-          RELEASE_REPO: ${{ vars.RELEASE_REPO }}
           GIT_AUTHOR_NAME: github-actions[bot]
           GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
           GIT_COMMITTER_NAME: github-actions[bot]
