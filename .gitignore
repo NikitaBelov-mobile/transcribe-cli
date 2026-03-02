@@ -1,0 +1,7 @@
+transcribe
+dist/
+.cache/
+.state/
+*.exe
+*.zip
+*.tar.gz
