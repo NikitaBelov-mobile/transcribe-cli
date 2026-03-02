@@ -19,15 +19,29 @@ import (
 	"transcribe-cli/internal/app"
 )
 
-func main() {
-	cfg := app.LoadConfig()
+var version = "dev"
 
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
+func main() {
+	shouldExit, err := app.ShouldApplyStagedUpdate()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Warning: failed to apply staged update:", err)
+	}
+	if shouldExit {
+		return
 	}
 
-	var err error
+	cfg := app.LoadConfig()
+	cfg.AppVersion = version
+
+	if len(os.Args) < 2 {
+		if err := runGUI(cfg, []string{}); err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	err = nil
 	switch os.Args[1] {
 	case "init":
 		err = runInit(cfg, os.Args[2:])
@@ -47,6 +61,9 @@ func main() {
 		err = runDoctor(cfg)
 	case "help", "-h", "--help":
 		printUsage()
+		return
+	case "version":
+		fmt.Println(version)
 		return
 	default:
 		err = fmt.Errorf("unknown command: %s", os.Args[1])
@@ -742,12 +759,16 @@ func humanSize(n int64) string {
 func printUsage() {
 	fmt.Print(`transcribe - offline transcription CLI
 
+Default launch:
+  transcribe                         Start GUI with automatic onboarding
+
 Commands:
   init                            Prepare runtime checks and default model
   run [flags] <file>              One-shot transcription (auto-start daemon)
   gui [--open]                    Launch local web UI for queue and models
   setup                           Initialize local state directories
   doctor                          Check local dependencies and daemon health
+  version                         Print app version
   daemon run                      Start local queue daemon
 
   model list                      List installed local models
@@ -769,6 +790,8 @@ Environment variables:
   TRANSCRIBE_CLI_STATE_DIR        State directory (default OS user config dir)
   TRANSCRIBE_CLI_MODELS_DIR       Models directory
   TRANSCRIBE_CLI_DEFAULT_MODEL    Default model (overrides saved config)
+  TRANSCRIBE_CLI_RELEASE_REPO     GitHub repo for auto-update checks
+  TRANSCRIBE_CLI_VERSION          Build version (normally injected by release)
   TRANSCRIBE_CLI_FFMPEG           ffmpeg binary name/path
   TRANSCRIBE_CLI_WHISPER          whisper-cli binary name/path
 `)

@@ -5,6 +5,8 @@ builds:
   - id: transcribe
     main: ./cmd/transcribe-cli
     binary: transcribe
+    ldflags:
+      - -s -w -X main.version={{.Version}}
     goos:
       - darwin
       - windows

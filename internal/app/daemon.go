@@ -22,11 +22,15 @@ type Daemon struct {
 	cfg   Config
 	store *Store
 
+	cfgMu sync.RWMutex
+
 	mu     sync.RWMutex
 	jobs   map[string]*Job
 	active map[string]context.CancelFunc
 
-	queue chan string
+	queue     chan string
+	bootstrap *BootstrapManager
+	updater   *Updater
 }
 
 func NewDaemon(cfg Config) (*Daemon, error) {
@@ -59,11 +63,13 @@ func NewDaemon(cfg Config) (*Daemon, error) {
 	}
 
 	return &Daemon{
-		cfg:    cfg,
-		store:  store,
-		jobs:   jobs,
-		active: make(map[string]context.CancelFunc),
-		queue:  make(chan string, cfg.QueueSize),
+		cfg:       cfg,
+		store:     store,
+		jobs:      jobs,
+		active:    make(map[string]context.CancelFunc),
+		queue:     make(chan string, cfg.QueueSize),
+		bootstrap: NewBootstrapManager(cfg),
+		updater:   NewUpdater(cfg),
 	}, nil
 }
 
@@ -84,6 +90,9 @@ func (d *Daemon) Run(ctx context.Context) error {
 	mux.HandleFunc("/v1/models/install", d.handleModelInstall)
 	mux.HandleFunc("/v1/models/use", d.handleModelUse)
 	mux.HandleFunc("/v1/models/remove", d.handleModelRemove)
+	mux.HandleFunc("/v1/bootstrap/status", d.handleBootstrapStatus)
+	mux.HandleFunc("/v1/bootstrap/ensure", d.handleBootstrapEnsure)
+	mux.HandleFunc("/v1/update/status", d.handleUpdateStatus)
 
 	server := &http.Server{
 		Addr:              d.cfg.Addr,
@@ -101,11 +110,33 @@ func (d *Daemon) Run(ctx context.Context) error {
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
+	d.bootstrap.EnsureAsync(func(ffmpegPath, whisperPath string) {
+		d.setRuntimeBinaries(ffmpegPath, whisperPath)
+	})
+	d.updater.CheckAsync()
+
 	err := server.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
 	return err
+}
+
+func (d *Daemon) currentConfig() Config {
+	d.cfgMu.RLock()
+	defer d.cfgMu.RUnlock()
+	return d.cfg
+}
+
+func (d *Daemon) setRuntimeBinaries(ffmpegPath, whisperPath string) {
+	d.cfgMu.Lock()
+	defer d.cfgMu.Unlock()
+	if strings.TrimSpace(ffmpegPath) != "" {
+		d.cfg.FFmpegBinary = ffmpegPath
+	}
+	if strings.TrimSpace(whisperPath) != "" {
+		d.cfg.WhisperBinary = whisperPath
+	}
 }
 
 func (d *Daemon) enqueuePending(ctx context.Context) {
@@ -124,6 +155,37 @@ func (d *Daemon) enqueuePending(ctx context.Context) {
 
 func (d *Daemon) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (d *Daemon) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, d.bootstrap.Status())
+}
+
+func (d *Daemon) handleBootstrapEnsure(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	started := d.bootstrap.EnsureAsync(func(ffmpegPath, whisperPath string) {
+		d.setRuntimeBinaries(ffmpegPath, whisperPath)
+	})
+	status := d.bootstrap.Status()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"started": started,
+		"status":  status,
+	})
+}
+
+func (d *Daemon) handleUpdateStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, d.updater.Status())
 }
 
 func (d *Daemon) handleJobs(w http.ResponseWriter, r *http.Request) {
@@ -183,7 +245,8 @@ func (d *Daemon) handleUploadJob(w http.ResponseWriter, r *http.Request) {
 	if safeName == "" || safeName == "." || safeName == string(os.PathSeparator) {
 		safeName = "upload.bin"
 	}
-	dstPath := filepath.Join(d.cfg.UploadsDir, makeID()+"-"+safeName)
+	cfg := d.currentConfig()
+	dstPath := filepath.Join(cfg.UploadsDir, makeID()+"-"+safeName)
 	dst, err := os.Create(dstPath)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create upload file"})
@@ -201,7 +264,7 @@ func (d *Daemon) handleUploadJob(w http.ResponseWriter, r *http.Request) {
 	model := r.FormValue("model")
 	outputDir := strings.TrimSpace(r.FormValue("outputDir"))
 	if outputDir == "" {
-		outputDir = d.cfg.OutputsDir
+		outputDir = cfg.OutputsDir
 	}
 
 	job, err := d.createAndQueueJob(dstPath, language, model, outputDir)
@@ -230,7 +293,7 @@ func (d *Daemon) createAndQueueJob(filePath, language, model, outputDir string) 
 
 	model = strings.TrimSpace(model)
 	if model == "" {
-		model = d.cfg.DefaultModel
+		model = d.currentConfig().DefaultModel
 	}
 	if !filepath.IsAbs(model) && !strings.ContainsRune(model, os.PathSeparator) {
 		model = CanonicalModelName(model)
@@ -372,7 +435,8 @@ func (d *Daemon) handleModels(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
-	models, err := ListModels(d.cfg)
+	cfg := d.currentConfig()
+	models, err := ListModels(cfg)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -388,8 +452,8 @@ func (d *Daemon) handleModels(w http.ResponseWriter, r *http.Request) {
 		items = append(items, modelView{Name: m.Name, Path: m.Path, SizeBytes: m.SizeBytes})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"defaultModel": d.cfg.DefaultModel,
-		"modelsDir":    d.cfg.ModelsDir,
+		"defaultModel": cfg.DefaultModel,
+		"modelsDir":    cfg.ModelsDir,
 		"models":       items,
 	})
 }
@@ -416,7 +480,7 @@ func (d *Daemon) handleModelInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path, err := InstallModel(d.cfg, req.Name, req.URL, nil)
+	path, err := InstallModel(d.currentConfig(), req.Name, req.URL, nil)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
@@ -447,17 +511,21 @@ func (d *Daemon) handleModelUse(w http.ResponseWriter, r *http.Request) {
 		model = CanonicalModelName(model)
 	}
 
-	settings, err := LoadSettings(d.cfg.SettingsFile)
+	cfg := d.currentConfig()
+	settings, err := LoadSettings(cfg.SettingsFile)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 	settings.DefaultModel = model
-	if err := SaveSettings(d.cfg.SettingsFile, settings); err != nil {
+	if err := SaveSettings(cfg.SettingsFile, settings); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	d.cfg.DefaultModel = model
+	cfg.DefaultModel = model
+	d.cfgMu.Lock()
+	d.cfg = cfg
+	d.cfgMu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]string{"defaultModel": model})
 }
 
@@ -474,7 +542,7 @@ func (d *Daemon) handleModelRemove(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
-	if err := RemoveModel(d.cfg, req.Name); err != nil {
+	if err := RemoveModel(d.currentConfig(), req.Name); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}

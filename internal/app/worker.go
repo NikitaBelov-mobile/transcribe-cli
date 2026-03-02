@@ -191,7 +191,8 @@ func (d *Daemon) runTranscription(ctx context.Context, job *Job) (string, string
 }
 
 func (d *Daemon) extractAudio(ctx context.Context, inputPath, outputPath string) error {
-	cmd := exec.CommandContext(ctx, d.cfg.FFmpegBinary,
+	cfg := d.currentConfig()
+	cmd := exec.CommandContext(ctx, cfg.FFmpegBinary,
 		"-y",
 		"-i", inputPath,
 		"-vn",
@@ -208,7 +209,8 @@ func (d *Daemon) extractAudio(ctx context.Context, inputPath, outputPath string)
 }
 
 func (d *Daemon) runWhisper(ctx context.Context, wavPath, outputBase, language, model string, onProgress func(int), wavSeconds float64) error {
-	modelPath, err := ResolveModelPath(d.cfg, model)
+	cfg := d.currentConfig()
+	modelPath, err := ResolveModelPath(cfg, model)
 	if err != nil {
 		return err
 	}
@@ -226,7 +228,7 @@ func (d *Daemon) runWhisper(ctx context.Context, wavPath, outputBase, language, 
 		args = append(args, "-l", language)
 	}
 
-	cmd := exec.CommandContext(ctx, d.cfg.WhisperBinary, args...)
+	cmd := exec.CommandContext(ctx, cfg.WhisperBinary, args...)
 	var output bytes.Buffer
 	cmd.Stdout = &output
 	cmd.Stderr = &output

@@ -1,19 +1,20 @@
 # transcribe-cli
 
-Offline CLI tool for audio/video transcription on macOS and Windows.
+Offline transcription app (CLI + local GUI) for macOS and Windows.
 
-- Full local processing (no server required)
-- Simple one-shot mode: `init` + `run`
-- Local GUI mode: `gui` (browser UI for files/queue/models)
+- Full local processing (no cloud server required)
+- Zero-setup launch: run binary and GUI opens automatically
+- Automatic onboarding: checks/downloads runtime components
+- Automatic model download for default model
+- Auto-update check with staged binary update
 - Advanced queue mode with progress/cancel/retry
 - Model management via `model presets/current/use/install/remove`
 - Outputs: `txt`, `srt`, `vtt`
 
 ## Requirements
 
-- `ffmpeg` in PATH
-- `whisper-cli` in PATH (from `whisper.cpp` build)
-- Go 1.23+ (for local build)
+- End user: only app binary (`transcribe` / `transcribe.exe`)
+- Build from source: Go 1.23+
 
 ## Install
 
@@ -26,17 +27,21 @@ go build -o transcribe ./cmd/transcribe-cli
 
 ### Option B: release binary
 
-Download from GitHub Releases and add binary to PATH.
+Download from GitHub Releases and run binary.
+No manual setup is required for onboarding flow.
 
 ## Easiest flow (recommended)
 
-1. Prepare environment and model:
+1. Start app:
 
 ```bash
-transcribe init
+transcribe
 ```
 
-2. Transcribe file (daemon starts automatically if needed):
+This launches local GUI and starts automatic onboarding.
+Once runtime is ready, upload file and start transcription.
+
+2. Optional CLI one-shot:
 
 ```bash
 transcribe run ./sample.mp4 --lang ru --model ggml-base
@@ -60,6 +65,7 @@ This opens `http://127.0.0.1:9864/` (or your configured address) where you can:
 - see queue progress
 - cancel/retry jobs
 - download `txt/srt/vtt` results
+- monitor onboarding and update status
 
 ## Advanced queue flow
 
@@ -94,6 +100,7 @@ transcribe queue retry <job-id>
 transcribe init [--model ggml-base] [--skip-model]
 transcribe run [--lang auto] [--model ggml-base] [--output-dir ./out] [--no-watch] [--interval 2s] <file>
 transcribe gui [--open]
+transcribe version
 
 transcribe setup
 transcribe doctor
@@ -114,6 +121,22 @@ transcribe queue watch <job-id> --interval 2s
 transcribe queue cancel <job-id>
 transcribe queue retry <job-id>
 ```
+
+## Onboarding and updates
+
+On startup GUI checks:
+
+- `ffmpeg`
+- `whisper-cli`
+- default model
+
+If missing, app attempts to install automatically into state directory.
+
+Auto-update:
+
+- app checks latest GitHub release in `TRANSCRIBE_CLI_RELEASE_REPO`
+- if newer binary exists, it is downloaded and staged
+- staged update is applied automatically on next launch
 
 ## Model handling
 
@@ -170,6 +193,8 @@ Default output directory is the source file directory, override with `--output-d
 - `TRANSCRIBE_CLI_STATE_DIR` (default OS user config dir)
 - `TRANSCRIBE_CLI_MODELS_DIR`
 - `TRANSCRIBE_CLI_DEFAULT_MODEL`
+- `TRANSCRIBE_CLI_RELEASE_REPO` (default `NikitaBelov-mobile/transcribe-cli`)
+- `TRANSCRIBE_CLI_VERSION` (normally set by release build)
 - `TRANSCRIBE_CLI_WORKERS`
 - `TRANSCRIBE_CLI_QUEUE_SIZE`
 - `TRANSCRIBE_CLI_FFMPEG` (default `ffmpeg`)

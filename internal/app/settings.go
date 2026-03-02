@@ -10,7 +10,9 @@ import (
 
 // Settings stores user defaults for the CLI.
 type Settings struct {
-	DefaultModel string `json:"defaultModel"`
+	DefaultModel  string `json:"defaultModel"`
+	FFmpegBinary  string `json:"ffmpegBinary,omitempty"`
+	WhisperBinary string `json:"whisperBinary,omitempty"`
 }
 
 func LoadSettings(path string) (Settings, error) {
@@ -27,11 +29,15 @@ func LoadSettings(path string) (Settings, error) {
 		return Settings{}, err
 	}
 	settings.DefaultModel = strings.TrimSpace(settings.DefaultModel)
+	settings.FFmpegBinary = strings.TrimSpace(settings.FFmpegBinary)
+	settings.WhisperBinary = strings.TrimSpace(settings.WhisperBinary)
 	return settings, nil
 }
 
 func SaveSettings(path string, settings Settings) error {
 	settings.DefaultModel = strings.TrimSpace(settings.DefaultModel)
+	settings.FFmpegBinary = strings.TrimSpace(settings.FFmpegBinary)
+	settings.WhisperBinary = strings.TrimSpace(settings.WhisperBinary)
 	payload, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err

@@ -18,40 +18,59 @@ const uiHTML = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Transcribe CLI UI</title>
   <style>
-    :root { --bg:#0b1020; --card:#131b31; --fg:#edf2ff; --muted:#9fb0d4; --accent:#63d2ff; --ok:#7df8a3; --warn:#ffd27d; --err:#ff9c9c; }
-    body { margin:0; font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial; background:linear-gradient(180deg,#0b1020,#0f1730); color:var(--fg); }
-    .wrap { max-width:1100px; margin:24px auto; padding:0 16px 32px; }
-    h1 { margin:0 0 16px; font-size:28px; }
-    .grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap:12px; }
-    .card { background:var(--card); border:1px solid #1d2a4a; border-radius:12px; padding:12px; }
+    :root { --bg:#081022; --card:#111d36; --fg:#edf2ff; --muted:#9fb0d4; --accent:#63d2ff; --ok:#7df8a3; --warn:#ffd27d; --err:#ff9c9c; }
+    body { margin:0; font-family: "Segoe UI", -apple-system, sans-serif; background:radial-gradient(1200px 600px at 20% -20%, #1c2d53 0%, #081022 60%); color:var(--fg); }
+    .wrap { max-width:1140px; margin:20px auto; padding:0 16px 32px; }
+    h1 { margin:0 0 10px; font-size:28px; letter-spacing:0.2px; }
+    h3 { margin:0 0 8px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(320px,1fr)); gap:12px; }
+    .card { background:var(--card); border:1px solid #223660; border-radius:14px; padding:12px; }
     .muted { color:var(--muted); }
     .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
-    input,select,button { border-radius:8px; border:1px solid #2c3d67; padding:8px 10px; background:#0f1730; color:var(--fg); }
-    button { cursor:pointer; background:#1a2747; }
+    .stack > div { margin-bottom:6px; }
+    input,select,button { border-radius:8px; border:1px solid #355083; padding:8px 10px; background:#0b1730; color:var(--fg); }
+    button { cursor:pointer; background:#17305a; }
     button.primary { background:#2257a8; border-color:#3f76cb; }
     button.good { background:#1f5f42; border-color:#3ea66f; }
+    button[disabled] { opacity:.5; cursor:not-allowed; }
     table { width:100%; border-collapse:collapse; font-size:13px; }
     th,td { text-align:left; border-bottom:1px solid #213156; padding:6px; vertical-align:top; }
     .status-ok { color:var(--ok); }
     .status-bad { color:var(--err); }
-    .pill { padding:2px 8px; border-radius:999px; background:#182541; font-size:12px; }
+    .status-warn { color:var(--warn); }
+    .pill { padding:2px 8px; border-radius:999px; background:#1a2c4e; font-size:12px; }
     .links a { color:var(--accent); margin-right:8px; }
+    .boot-item { display:flex; justify-content:space-between; gap:8px; border:1px solid #243a66; border-radius:8px; padding:7px 9px; margin:6px 0; background:#0c1833; }
+    code { word-break:break-all; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Transcribe UI</h1>
-    <div class="muted" id="health">Checking daemon...</div>
+    <div id="health" class="muted">Checking daemon...</div>
 
     <div class="grid" style="margin-top:12px;">
       <section class="card">
-        <h3 style="margin:0 0 8px;">Runtime</h3>
+        <h3>Onboarding</h3>
+        <div id="bootstrapSummary" class="muted">Checking runtime...</div>
+        <div id="bootstrapList"></div>
+      </section>
+
+      <section class="card">
+        <h3>App Update</h3>
+        <div id="updateSummary" class="muted">Checking updates...</div>
+      </section>
+    </div>
+
+    <div class="grid" style="margin-top:12px;">
+      <section class="card">
+        <h3>Runtime</h3>
         <div class="row"><span class="muted">Default model:</span> <span id="defaultModel" class="pill">-</span></div>
         <div class="row"><span class="muted">Models dir:</span> <code id="modelsDir">-</code></div>
       </section>
 
       <section class="card">
-        <h3 style="margin:0 0 8px;">Models</h3>
+        <h3>Models</h3>
         <div class="row">
           <select id="modelSelect"></select>
           <button id="setDefaultBtn">Set Default</button>
@@ -60,12 +79,12 @@ const uiHTML = `<!doctype html>
           <select id="presetSelect"></select>
           <button id="installPresetBtn" class="good">Download Preset</button>
         </div>
-        <div class="muted" id="modelMsg"></div>
+        <div id="modelMsg" class="muted"></div>
       </section>
     </div>
 
     <section class="card" style="margin-top:12px;">
-      <h3 style="margin:0 0 8px;">Transcribe File</h3>
+      <h3>Transcribe File</h3>
       <div class="row">
         <input id="fileInput" type="file" accept="audio/*,video/*" />
       </div>
@@ -74,11 +93,11 @@ const uiHTML = `<!doctype html>
         <label>Model: <input id="runModelInput" value="ggml-base" style="width:160px" /></label>
         <button id="uploadBtn" class="primary">Start Transcription</button>
       </div>
-      <div class="muted" id="uploadMsg"></div>
+      <div id="uploadMsg" class="muted"></div>
     </section>
 
     <section class="card" style="margin-top:12px;">
-      <h3 style="margin:0 0 8px;">Jobs</h3>
+      <h3>Jobs</h3>
       <table>
         <thead><tr><th>ID</th><th>Status</th><th>Progress</th><th>Model</th><th>File</th><th>Results</th><th>Actions</th></tr></thead>
         <tbody id="jobsBody"></tbody>
@@ -87,7 +106,15 @@ const uiHTML = `<!doctype html>
   </div>
 
 <script>
-const state = { jobs: [], models: [], presets: [], defaultModel: 'ggml-base' };
+const state = {
+  jobs: [],
+  models: [],
+  presets: [],
+  defaultModel: 'ggml-base',
+  modelsDir: '-',
+  bootstrap: { ready: false, inProgress: false, components: [] },
+  update: { enabled: false, message: '' },
+};
 
 async function api(path, options={}) {
   const res = await fetch(path, options);
@@ -105,6 +132,75 @@ function setMsg(id, msg, ok=true) {
   const el = document.getElementById(id);
   el.textContent = msg;
   el.className = ok ? 'status-ok' : 'status-bad';
+}
+
+function lockControls(locked) {
+  const ids = ['uploadBtn','setDefaultBtn','installPresetBtn','modelSelect','presetSelect','fileInput','langInput','runModelInput'];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !!locked;
+  }
+}
+
+function refreshBootstrapUI() {
+  const summary = document.getElementById('bootstrapSummary');
+  const list = document.getElementById('bootstrapList');
+  const s = state.bootstrap || {};
+
+  list.innerHTML = '';
+  for (const c of (s.components || [])) {
+    const div = document.createElement('div');
+    div.className = 'boot-item';
+    const stateClass = c.status === 'ready' ? 'status-ok' : (c.status === 'installing' ? 'status-warn' : 'status-bad');
+    const stateText = c.status || 'unknown';
+    const msg = c.message ? ('<div class="muted">' + c.message + '</div>') : '';
+    const path = c.path ? ('<div class="muted"><code>' + c.path + '</code></div>') : '';
+    div.innerHTML = '<div><strong>' + c.name + '</strong>' + msg + path + '</div><div class="' + stateClass + '">' + stateText + '</div>';
+    list.appendChild(div);
+  }
+
+  if (s.ready) {
+    summary.textContent = 'Runtime is ready.';
+    summary.className = 'status-ok';
+  } else if (s.inProgress) {
+    summary.textContent = 'Preparing runtime automatically...';
+    summary.className = 'status-warn';
+  } else if (s.error) {
+    summary.textContent = 'Runtime setup failed: ' + s.error;
+    summary.className = 'status-bad';
+  } else {
+    summary.textContent = 'Runtime setup is required, starting automatically...';
+    summary.className = 'status-warn';
+  }
+
+  lockControls(!s.ready);
+}
+
+function refreshUpdateUI() {
+  const el = document.getElementById('updateSummary');
+  const up = state.update || {};
+
+  if (!up.enabled) {
+    el.textContent = 'Auto-update is disabled.';
+    el.className = 'muted';
+    return;
+  }
+  if (up.inProgress) {
+    el.textContent = 'Checking for updates...';
+    el.className = 'status-warn';
+    return;
+  }
+  if (up.error) {
+    el.textContent = 'Update check error: ' + up.error;
+    el.className = 'status-bad';
+    return;
+  }
+  const parts = [];
+  if (up.currentVersion) parts.push('Current: ' + up.currentVersion);
+  if (up.latestVersion) parts.push('Latest: ' + up.latestVersion);
+  if (up.message) parts.push(up.message);
+  el.textContent = parts.join(' | ') || 'No update information yet';
+  el.className = up.updateAvailable ? 'status-warn' : 'status-ok';
 }
 
 function refreshModelsUI() {
@@ -165,8 +261,8 @@ function refreshJobsUI() {
       '<td>' + job.status + '</td>' +
       '<td>' + job.progress + '%</td>' +
       '<td>' + (job.model || '-') + '</td>' +
-      '<td title=\"' + job.filePath + '\">' + job.filePath + '</td>' +
-      '<td class=\"links\">' + jobResultLinks(job) + '</td>' +
+      '<td title="' + job.filePath + '">' + job.filePath + '</td>' +
+      '<td class="links">' + jobResultLinks(job) + '</td>' +
       '<td>' + jobActions(job) + '</td>';
     body.appendChild(tr);
   }
@@ -175,8 +271,19 @@ function refreshJobsUI() {
 async function refreshData() {
   try {
     await api('/healthz');
-    document.getElementById('health').textContent = 'Daemon healthy';
-    document.getElementById('health').className = 'status-ok';
+    const health = document.getElementById('health');
+    health.textContent = 'Daemon healthy';
+    health.className = 'status-ok';
+
+    state.bootstrap = await api('/v1/bootstrap/status');
+    if (!state.bootstrap.ready && !state.bootstrap.inProgress) {
+      await api('/v1/bootstrap/ensure', { method: 'POST' });
+      state.bootstrap = await api('/v1/bootstrap/status');
+    }
+    refreshBootstrapUI();
+
+    state.update = await api('/v1/update/status');
+    refreshUpdateUI();
 
     const modelData = await api('/v1/models');
     state.models = modelData.models || [];
@@ -192,8 +299,9 @@ async function refreshData() {
     refreshModelsUI();
     refreshJobsUI();
   } catch (err) {
-    document.getElementById('health').textContent = 'Error: ' + err.message;
-    document.getElementById('health').className = 'status-bad';
+    const health = document.getElementById('health');
+    health.textContent = 'Error: ' + err.message;
+    health.className = 'status-bad';
   }
 }
 
@@ -223,6 +331,11 @@ document.getElementById('installPresetBtn').addEventListener('click', async () =
 });
 
 document.getElementById('uploadBtn').addEventListener('click', async () => {
+  if (!state.bootstrap.ready) {
+    setMsg('uploadMsg', 'Runtime is still preparing, please wait.', false);
+    return;
+  }
+
   const fileInput = document.getElementById('fileInput');
   const file = fileInput.files && fileInput.files[0];
   if (!file) {
