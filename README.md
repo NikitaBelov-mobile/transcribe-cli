@@ -45,7 +45,7 @@ Once runtime is ready, upload file and start transcription.
 2. Optional CLI one-shot:
 
 ```bash
-transcribe run ./sample.mp4 --lang ru --model ggml-base
+transcribe run ./sample.mp4 --lang ru --model ggml-large-v3-turbo
 ```
 
 `run` waits for completion and prints output file paths.
@@ -132,7 +132,7 @@ transcribe daemon run
 2. Add a job:
 
 ```bash
-transcribe queue add --lang ru --model ggml-base ./sample.mp4
+transcribe queue add --lang ru --model ggml-large-v3-turbo ./sample.mp4
 ```
 
 3. Watch job:
@@ -151,8 +151,8 @@ transcribe queue retry <job-id>
 ## Commands
 
 ```bash
-transcribe init [--model ggml-base] [--skip-model]
-transcribe run [--lang auto] [--model ggml-base] [--output-dir ./out] [--no-watch] [--interval 2s] <file>
+transcribe init [--model ggml-large-v3-turbo] [--skip-model]
+transcribe run [--lang auto] [--model ggml-large-v3-turbo] [--output-dir ./out] [--no-watch] [--interval 2s] <file>
 transcribe gui [--open]
 transcribe version
 
@@ -163,12 +163,12 @@ transcribe daemon run [--addr 127.0.0.1:9864] [--workers 4] [--queue-size 16]
 transcribe model list
 transcribe model presets
 transcribe model current
-transcribe model use ggml-base
-transcribe model install --name ggml-base
+transcribe model use ggml-large-v3-turbo
+transcribe model install --name ggml-large-v3-turbo
 transcribe model install --name my-custom --url https://example.com/model.bin
-transcribe model remove ggml-base
+transcribe model remove ggml-large-v3-turbo
 
-transcribe queue add [--lang auto] [--model ggml-base] [--output-dir ./out] <file>
+transcribe queue add [--lang auto] [--model ggml-large-v3-turbo] [--output-dir ./out] <file>
 transcribe queue list
 transcribe queue status <job-id>
 transcribe queue watch <job-id> --interval 2s
@@ -199,7 +199,7 @@ Models are stored in:
 - macOS: `~/Library/Application Support/TranscribeCLI/models`
 - Windows: `%AppData%\\TranscribeCLI\\models`
 
-Canonical model names are `ggml-*` (for example `ggml-base`).
+Canonical model names are `ggml-*` (for example `ggml-large-v3-turbo`).
 
 Preset aliases:
 
@@ -208,6 +208,7 @@ Preset aliases:
 - `small` -> `ggml-small`
 - `medium` -> `ggml-medium`
 - `large` -> `ggml-large-v3`
+- `turbo` -> `ggml-large-v3-turbo`
 
 By default, model names resolve to `<models-dir>/<name>.bin`.
 
@@ -217,7 +218,7 @@ Default model is read in this order:
 
 1. `TRANSCRIBE_CLI_DEFAULT_MODEL` environment variable
 2. saved config in `<state-dir>/config.json`
-3. fallback: `ggml-base`
+3. fallback: `ggml-large-v3-turbo`
 
 ## How progress works
 
@@ -247,6 +248,9 @@ Default output directory is the source file directory, override with `--output-d
 - `TRANSCRIBE_CLI_STATE_DIR` (default OS user config dir)
 - `TRANSCRIBE_CLI_MODELS_DIR`
 - `TRANSCRIBE_CLI_DEFAULT_MODEL`
+- `TRANSCRIBE_CLI_PROMPT` (override initial whisper prompt)
+- `TRANSCRIBE_CLI_WHISPER_NO_CONTEXT` (default `true`)
+- `TRANSCRIBE_CLI_WHISPER_TEMPERATURE` (default `0.2`)
 - `TRANSCRIBE_CLI_RELEASE_REPO` (default `NikitaBelov-mobile/transcribe-cli`)
 - `TRANSCRIBE_CLI_VERSION` (normally set by release build)
 - `TRANSCRIBE_CLI_WORKERS`

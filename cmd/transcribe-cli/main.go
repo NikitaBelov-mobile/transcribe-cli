@@ -572,7 +572,7 @@ func saveDefaultModel(cfg app.Config, model string) error {
 func cfgSafeDefaultModel(defaultModel string) string {
 	defaultModel = strings.TrimSpace(defaultModel)
 	if defaultModel == "" {
-		return "ggml-base"
+		return "ggml-large-v3-turbo"
 	}
 	return app.CanonicalModelName(defaultModel)
 }
@@ -864,6 +864,9 @@ Environment variables:
   TRANSCRIBE_CLI_DEFAULT_MODEL    Default model (overrides saved config)
   TRANSCRIBE_CLI_RELEASE_REPO     GitHub repo for auto-update checks
   TRANSCRIBE_CLI_VERSION          Build version (normally injected by release)
+  TRANSCRIBE_CLI_PROMPT           Whisper initial prompt override
+  TRANSCRIBE_CLI_WHISPER_NO_CONTEXT  Use no-context decoding mode (default true)
+  TRANSCRIBE_CLI_WHISPER_TEMPERATURE Whisper sampling temperature (default 0.2)
   TRANSCRIBE_CLI_FFMPEG           ffmpeg binary name/path
   TRANSCRIBE_CLI_WHISPER          whisper-cli binary name/path
 `)

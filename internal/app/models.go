@@ -24,6 +24,7 @@ var presetModels = []PresetModel{
 	{Alias: "small", Name: "ggml-small", URL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"},
 	{Alias: "medium", Name: "ggml-medium", URL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin"},
 	{Alias: "large", Name: "ggml-large-v3", URL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"},
+	{Alias: "turbo", Name: "ggml-large-v3-turbo", URL: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin"},
 }
 
 var presetIndex = buildPresetIndex()
@@ -35,6 +36,7 @@ func buildPresetIndex() map[string]PresetModel {
 		index[strings.ToLower(preset.Name)] = preset
 	}
 	index["large-v3"] = presetIndexValue("large")
+	index["large-v3-turbo"] = presetIndexValue("turbo")
 	return index
 }
 

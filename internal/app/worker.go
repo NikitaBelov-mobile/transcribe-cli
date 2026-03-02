@@ -12,7 +12,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -248,9 +250,32 @@ func (d *Daemon) runWhisper(ctx context.Context, wavPath, outputBase, language, 
 		"-ovtt",
 		"-of", outputArg,
 	}
+	caps := detectWhisperCapabilities(cfg.WhisperBinary)
+	if caps.threadsFlag != "" {
+		threads := max(1, min(8, runtime.NumCPU()-2))
+		args = append(args, caps.threadsFlag, strconv.Itoa(threads))
+	}
+	if cfg.WhisperNoContext {
+		if caps.noContextFlag != "" {
+			args = append(args, caps.noContextFlag)
+		} else if caps.maxContextFlag != "" {
+			args = append(args, caps.maxContextFlag, "0")
+		}
+	}
+	if caps.temperatureFlag != "" {
+		args = append(args, caps.temperatureFlag, fmt.Sprintf("%.2f", cfg.WhisperTemperature))
+	}
+
 	language = strings.TrimSpace(language)
 	if language != "" && language != "auto" {
 		args = append(args, "-l", language)
+	}
+	prompt := strings.TrimSpace(cfg.TranscriptionPrompt)
+	if prompt == "" {
+		prompt = DefaultPromptForLanguage(language)
+	}
+	if prompt != "" && caps.promptFlag != "" {
+		args = append(args, caps.promptFlag, prompt)
 	}
 
 	cmd := exec.CommandContext(ctx, cfg.WhisperBinary, args...)
@@ -352,6 +377,80 @@ func copyIfExists(src, dst string) error {
 	return copyFile(src, dst)
 }
 
+type whisperCapabilities struct {
+	promptFlag      string
+	threadsFlag     string
+	temperatureFlag string
+	noContextFlag   string
+	maxContextFlag  string
+}
+
+var whisperCapsCache sync.Map
+
+func detectWhisperCapabilities(binary string) whisperCapabilities {
+	key := strings.TrimSpace(binary)
+	if key == "" {
+		key = "whisper-cli"
+	}
+	if cached, ok := whisperCapsCache.Load(key); ok {
+		return cached.(whisperCapabilities)
+	}
+
+	out, err := exec.Command(key, "--help").CombinedOutput()
+	help := strings.ToLower(strings.TrimSpace(string(out)))
+	if err != nil && help == "" {
+		caps := whisperCapabilities{
+			promptFlag:      "--prompt",
+			threadsFlag:     "-t",
+			temperatureFlag: "--temperature",
+			maxContextFlag:  "--max-context",
+		}
+		whisperCapsCache.Store(key, caps)
+		return caps
+	}
+
+	caps := whisperCapabilities{}
+	if strings.Contains(help, "--prompt") {
+		caps.promptFlag = "--prompt"
+	} else if strings.Contains(help, "-p ") || strings.Contains(help, " -p,") {
+		caps.promptFlag = "-p"
+	}
+
+	if strings.Contains(help, "--threads") || strings.Contains(help, " -t,") {
+		caps.threadsFlag = "-t"
+	}
+
+	if strings.Contains(help, "--temperature") {
+		caps.temperatureFlag = "--temperature"
+	} else if strings.Contains(help, "-tp") {
+		caps.temperatureFlag = "-tp"
+	}
+
+	if strings.Contains(help, "--no-context") {
+		caps.noContextFlag = "--no-context"
+	}
+	if strings.Contains(help, "--max-context") {
+		caps.maxContextFlag = "--max-context"
+	}
+
+	// Conservative fallback for common whisper.cpp CLI flags.
+	if caps.promptFlag == "" {
+		caps.promptFlag = "--prompt"
+	}
+	if caps.threadsFlag == "" {
+		caps.threadsFlag = "-t"
+	}
+	if caps.temperatureFlag == "" {
+		caps.temperatureFlag = "--temperature"
+	}
+	if caps.noContextFlag == "" && caps.maxContextFlag == "" {
+		caps.maxContextFlag = "--max-context"
+	}
+
+	whisperCapsCache.Store(key, caps)
+	return caps
+}
+
 func normalizePathForExternalTool(path string) string {
 	path = strings.TrimSpace(path)
 	if path == "" || runtime.GOOS != "windows" {
@@ -447,4 +546,11 @@ func isASCII(s string) bool {
 		}
 	}
 	return true
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

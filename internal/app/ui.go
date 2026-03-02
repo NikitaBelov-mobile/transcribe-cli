@@ -93,7 +93,7 @@ const uiHTML = `<!doctype html>
       </div>
       <div class="row">
         <label>Language: <input id="langInput" value="auto" style="width:110px" /></label>
-        <label>Model: <input id="runModelInput" value="ggml-base" style="width:160px" /></label>
+        <label>Model: <input id="runModelInput" value="ggml-large-v3-turbo" style="width:200px" /></label>
         <button id="uploadBtn" class="primary">Start Transcription</button>
       </div>
       <div id="uploadMsg" class="muted"></div>
@@ -113,7 +113,7 @@ const state = {
   jobs: [],
   models: [],
   presets: [],
-  defaultModel: 'ggml-base',
+  defaultModel: 'ggml-large-v3-turbo',
   modelsDir: '-',
   bootstrap: { ready: false, inProgress: false, components: [] },
   update: { enabled: false, message: '' },
@@ -304,7 +304,7 @@ async function refreshData() {
 
     const modelData = await api('/v1/models');
     state.models = modelData.models || [];
-    state.defaultModel = modelData.defaultModel || 'ggml-base';
+    state.defaultModel = modelData.defaultModel || 'ggml-large-v3-turbo';
     state.modelsDir = modelData.modelsDir || '-';
 
     const presets = await api('/v1/models/presets');
@@ -363,7 +363,7 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
   const form = new FormData();
   form.append('file', file);
   form.append('language', document.getElementById('langInput').value || 'auto');
-  form.append('model', document.getElementById('runModelInput').value || state.defaultModel || 'ggml-base');
+  form.append('model', document.getElementById('runModelInput').value || state.defaultModel || 'ggml-large-v3-turbo');
 
   try {
     setMsg('uploadMsg', 'Uploading and queueing...', true);

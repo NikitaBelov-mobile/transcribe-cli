@@ -10,23 +10,26 @@ import (
 
 // Config defines runtime settings for the CLI and local daemon.
 type Config struct {
-	Addr          string
-	Workers       int
-	QueueSize     int
-	StateDir      string
-	BinDir        string
-	UpdatesDir    string
-	JobsFile      string
-	SettingsFile  string
-	ModelsDir     string
-	UploadsDir    string
-	OutputsDir    string
-	DefaultModel  string
-	FFmpegBinary  string
-	WhisperBinary string
-	ReleaseRepo   string
-	AppVersion    string
-	ClientBaseURL string
+	Addr                string
+	Workers             int
+	QueueSize           int
+	StateDir            string
+	BinDir              string
+	UpdatesDir          string
+	JobsFile            string
+	SettingsFile        string
+	ModelsDir           string
+	UploadsDir          string
+	OutputsDir          string
+	DefaultModel        string
+	FFmpegBinary        string
+	WhisperBinary       string
+	WhisperNoContext    bool
+	WhisperTemperature  float64
+	TranscriptionPrompt string
+	ReleaseRepo         string
+	AppVersion          string
+	ClientBaseURL       string
 }
 
 func LoadConfig() Config {
@@ -46,7 +49,7 @@ func LoadConfig() Config {
 		}
 	}
 	if defaultModel == "" {
-		defaultModel = "ggml-base"
+		defaultModel = "ggml-large-v3-turbo"
 	}
 
 	ffmpegBinary := strings.TrimSpace(getEnv("TRANSCRIBE_CLI_FFMPEG", ""))
@@ -72,23 +75,26 @@ func LoadConfig() Config {
 	}
 
 	cfg := Config{
-		Addr:          addr,
-		Workers:       getEnvInt("TRANSCRIBE_CLI_WORKERS", max(1, runtime.NumCPU()/2)),
-		QueueSize:     getEnvInt("TRANSCRIBE_CLI_QUEUE_SIZE", max(8, runtime.NumCPU()*2)),
-		StateDir:      stateDir,
-		BinDir:        binDir,
-		UpdatesDir:    updatesDir,
-		JobsFile:      filepath.Join(stateDir, "jobs.json"),
-		SettingsFile:  settingsFile,
-		ModelsDir:     getEnv("TRANSCRIBE_CLI_MODELS_DIR", modelsDir),
-		UploadsDir:    filepath.Join(stateDir, "uploads"),
-		OutputsDir:    filepath.Join(stateDir, "outputs"),
-		DefaultModel:  CanonicalModelName(defaultModel),
-		FFmpegBinary:  ffmpegBinary,
-		WhisperBinary: whisperBinary,
-		ReleaseRepo:   releaseRepo,
-		AppVersion:    strings.TrimSpace(getEnv("TRANSCRIBE_CLI_VERSION", "")),
-		ClientBaseURL: "http://" + addr,
+		Addr:                addr,
+		Workers:             getEnvInt("TRANSCRIBE_CLI_WORKERS", max(1, runtime.NumCPU()/2)),
+		QueueSize:           getEnvInt("TRANSCRIBE_CLI_QUEUE_SIZE", max(8, runtime.NumCPU()*2)),
+		StateDir:            stateDir,
+		BinDir:              binDir,
+		UpdatesDir:          updatesDir,
+		JobsFile:            filepath.Join(stateDir, "jobs.json"),
+		SettingsFile:        settingsFile,
+		ModelsDir:           getEnv("TRANSCRIBE_CLI_MODELS_DIR", modelsDir),
+		UploadsDir:          filepath.Join(stateDir, "uploads"),
+		OutputsDir:          filepath.Join(stateDir, "outputs"),
+		DefaultModel:        CanonicalModelName(defaultModel),
+		FFmpegBinary:        ffmpegBinary,
+		WhisperBinary:       whisperBinary,
+		WhisperNoContext:    getEnvBool("TRANSCRIBE_CLI_WHISPER_NO_CONTEXT", true),
+		WhisperTemperature:  getEnvFloat("TRANSCRIBE_CLI_WHISPER_TEMPERATURE", 0.2),
+		TranscriptionPrompt: strings.TrimSpace(getEnv("TRANSCRIBE_CLI_PROMPT", "")),
+		ReleaseRepo:         releaseRepo,
+		AppVersion:          strings.TrimSpace(getEnv("TRANSCRIBE_CLI_VERSION", "")),
+		ClientBaseURL:       "http://" + addr,
 	}
 	if cfg.Workers <= 0 {
 		cfg.Workers = 1
@@ -157,6 +163,31 @@ func getEnvInt(key string, fallback int) int {
 		if n, err := strconv.Atoi(value); err == nil {
 			return n
 		}
+	}
+	return fallback
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	case "":
+		return fallback
+	default:
+		return fallback
+	}
+}
+
+func getEnvFloat(key string, fallback float64) float64 {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	if n, err := strconv.ParseFloat(value, 64); err == nil {
+		return n
 	}
 	return fallback
 }
