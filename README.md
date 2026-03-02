@@ -88,13 +88,19 @@ Build/run:
 # from repo root
 go get github.com/wailsapp/wails/v2@latest
 go get github.com/wailsapp/wails/v2/pkg/...@latest
-go run -tags desktop ./cmd/transcribe-desktop
+go run -tags "desktop,dev" ./cmd/transcribe-desktop
 ```
 
 Or with Wails:
 
 ```bash
 wails build -tags desktop -platform windows/amd64
+```
+
+Direct Go production build (desktop release-style):
+
+```bash
+go build -mod=mod -tags "desktop,production" -ldflags "-s -w -X main.version=vX.Y.Z -H=windowsgui" -o transcribe-desktop.exe ./cmd/transcribe-desktop
 ```
 
 ### How desktop mode works

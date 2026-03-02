@@ -79,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist-desktop
-          go build -mod=mod -tags desktop -ldflags "-s -w -X main.version=${GITHUB_REF_NAME} -H=windowsgui" -o dist-desktop/transcribe-desktop.exe ./cmd/transcribe-desktop
+          go build -mod=mod -tags "desktop,production" -ldflags "-s -w -X main.version=${GITHUB_REF_NAME} -H=windowsgui" -o dist-desktop/transcribe-desktop.exe ./cmd/transcribe-desktop
 
       - name: Pack desktop artifact
         shell: powershell
