@@ -109,7 +109,10 @@ jobs:
             tail -n 240 dist-desktop/logs/winui-publish.log || true
             exit 1
           fi
-          cp dist-desktop/publish/TranscribeDesktop.WinUI.exe dist-desktop/bundle/TranscribeDesktop.exe
+          cp -R dist-desktop/publish/. dist-desktop/bundle/
+          if [ -f dist-desktop/bundle/TranscribeDesktop.WinUI.exe ] && [ ! -f dist-desktop/bundle/TranscribeDesktop.exe ]; then
+            cp dist-desktop/bundle/TranscribeDesktop.WinUI.exe dist-desktop/bundle/TranscribeDesktop.exe
+          fi
 
       - name: Upload WinUI diagnostics
         if: failure()

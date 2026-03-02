@@ -78,7 +78,10 @@ build-desktop-winui: ## Build WinUI desktop bundle (TranscribeDesktop.WinUI.exe 
 		-p:IncludeNativeLibrariesForSelfExtract=true \
 		-p:EnableMsixTooling=true \
 		-o "$(DESKTOP_DIST_DIR)/publish-winui"
-	cp "$(DESKTOP_DIST_DIR)/publish-winui/TranscribeDesktop.WinUI.exe" "$(DESKTOP_DIST_DIR)/bundle-winui/TranscribeDesktop.exe"
+	cp -R "$(DESKTOP_DIST_DIR)/publish-winui/." "$(DESKTOP_DIST_DIR)/bundle-winui/"
+	@if [ -f "$(DESKTOP_DIST_DIR)/bundle-winui/TranscribeDesktop.WinUI.exe" ] && [ ! -f "$(DESKTOP_DIST_DIR)/bundle-winui/TranscribeDesktop.exe" ]; then \
+		cp "$(DESKTOP_DIST_DIR)/bundle-winui/TranscribeDesktop.WinUI.exe" "$(DESKTOP_DIST_DIR)/bundle-winui/TranscribeDesktop.exe"; \
+	fi
 	@echo "WinUI desktop bundle: $(DESKTOP_DIST_DIR)/bundle-winui"
 
 git-status: ## Show short git status
