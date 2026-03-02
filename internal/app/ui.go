@@ -59,6 +59,9 @@ const uiHTML = `<!doctype html>
       <section class="card">
         <h3>App Update</h3>
         <div id="updateSummary" class="muted">Checking updates...</div>
+        <div class="row" style="margin-top:8px;">
+          <button id="updateCheckBtn">Check Updates</button>
+        </div>
       </section>
     </div>
 
@@ -201,6 +204,17 @@ function refreshUpdateUI() {
   if (up.message) parts.push(up.message);
   el.textContent = parts.join(' | ') || 'No update information yet';
   el.className = up.updateAvailable ? 'status-warn' : 'status-ok';
+}
+
+async function checkUpdatesNow() {
+  try {
+    await api('/v1/update/check', { method: 'POST' });
+    await refreshData();
+  } catch (err) {
+    const el = document.getElementById('updateSummary');
+    el.textContent = 'Update check error: ' + err.message;
+    el.className = 'status-bad';
+  }
 }
 
 function refreshModelsUI() {
@@ -379,6 +393,10 @@ document.getElementById('jobsBody').addEventListener('click', async (e) => {
   } catch (err) {
     alert(err.message);
   }
+});
+
+document.getElementById('updateCheckBtn').addEventListener('click', async () => {
+  await checkUpdatesNow();
 });
 
 refreshData();

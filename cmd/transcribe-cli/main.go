@@ -745,6 +745,23 @@ func openURL(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
+		// Prefer app-window mode so UI behaves like a local desktop app, not a browser tab.
+		appLaunchers := []struct {
+			bin  string
+			args []string
+		}{
+			{bin: "msedge", args: []string{"--app=" + url, "--new-window"}},
+			{bin: "chrome", args: []string{"--app=" + url, "--new-window"}},
+			{bin: "brave", args: []string{"--app=" + url, "--new-window"}},
+		}
+		for _, launcher := range appLaunchers {
+			if _, err := exec.LookPath(launcher.bin); err != nil {
+				continue
+			}
+			if err := exec.Command(launcher.bin, launcher.args...).Start(); err == nil {
+				return nil
+			}
+		}
 		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 	case "darwin":
 		cmd = exec.Command("open", url)

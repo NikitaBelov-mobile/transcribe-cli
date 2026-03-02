@@ -51,13 +51,16 @@ transcribe run ./sample.mp4 --lang ru --model ggml-base
 
 ## GUI mode
 
-Start local web UI:
+Start local UI:
 
 ```bash
 transcribe gui
 ```
 
-This opens `http://127.0.0.1:9864/` (or your configured address) where you can:
+On Windows, app tries to open UI in app-window mode (`msedge/chrome --app=...`) first.
+Fallback is regular browser open.
+
+UI opens on `http://127.0.0.1:9864/` (or your configured address) where you can:
 
 - choose or download models
 - set default model
@@ -66,6 +69,7 @@ This opens `http://127.0.0.1:9864/` (or your configured address) where you can:
 - cancel/retry jobs
 - download `txt/srt/vtt` results
 - monitor onboarding and update status
+- trigger manual update check from GUI
 
 ## Advanced queue flow
 

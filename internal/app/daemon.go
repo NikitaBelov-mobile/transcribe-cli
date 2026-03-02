@@ -93,6 +93,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	mux.HandleFunc("/v1/bootstrap/status", d.handleBootstrapStatus)
 	mux.HandleFunc("/v1/bootstrap/ensure", d.handleBootstrapEnsure)
 	mux.HandleFunc("/v1/update/status", d.handleUpdateStatus)
+	mux.HandleFunc("/v1/update/check", d.handleUpdateCheck)
 
 	server := &http.Server{
 		Addr:              d.cfg.Addr,
@@ -191,6 +192,18 @@ func (d *Daemon) handleUpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, d.updater.Status())
+}
+
+func (d *Daemon) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	started := d.updater.CheckAsync()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"started": started,
+		"status":  d.updater.Status(),
+	})
 }
 
 func (d *Daemon) handleJobs(w http.ResponseWriter, r *http.Request) {
