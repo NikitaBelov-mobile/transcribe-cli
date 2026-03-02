@@ -110,9 +110,6 @@ jobs:
             exit 1
           fi
           cp -R dist-desktop/publish/. dist-desktop/bundle/
-          if [ -f dist-desktop/bundle/TranscribeDesktop.WinUI.exe ] && [ ! -f dist-desktop/bundle/TranscribeDesktop.exe ]; then
-            cp dist-desktop/bundle/TranscribeDesktop.WinUI.exe dist-desktop/bundle/TranscribeDesktop.exe
-          fi
 
       - name: Upload WinUI diagnostics
         if: failure()
