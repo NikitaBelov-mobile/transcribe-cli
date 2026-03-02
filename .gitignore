@@ -1,5 +1,7 @@
 transcribe
 dist/
+!cmd/transcribe-desktop/frontend/dist/
+!cmd/transcribe-desktop/frontend/dist/index.html
 .cache/
 .state/
 *.exe

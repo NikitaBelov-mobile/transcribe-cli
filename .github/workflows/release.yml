@@ -63,3 +63,41 @@ jobs:
           GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
         run: |
           bash scripts/release/update-winget-manifests.sh
+
+  desktop-windows:
+    runs-on: windows-latest
+    needs: goreleaser
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Resolve desktop dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          go get github.com/wailsapp/wails/v2@latest
+          go get github.com/wailsapp/wails/v2/pkg/...@latest
+
+      - name: Build desktop executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-desktop
+          go build -tags desktop -ldflags "-s -w -X main.version=${GITHUB_REF_NAME} -H=windowsgui" -o dist-desktop/transcribe-desktop.exe ./cmd/transcribe-desktop
+
+      - name: Pack desktop artifact
+        shell: powershell
+        run: |
+          Compress-Archive -Path dist-desktop/transcribe-desktop.exe -DestinationPath dist-desktop/transcribe-desktop_${{ github.ref_name }}_windows_amd64.zip
+
+      - name: Upload desktop artifact to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist-desktop/transcribe-desktop_${{ github.ref_name }}_windows_amd64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

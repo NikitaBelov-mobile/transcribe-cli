@@ -97,6 +97,24 @@ Or with Wails:
 wails build -tags desktop -platform windows/amd64
 ```
 
+### How desktop mode works
+
+1. Desktop EXE starts an embedded local backend daemon (same API/queue/model logic as CLI mode).
+2. If default port `127.0.0.1:9864` is busy, app picks next free local port automatically.
+3. Wails window opens local UI inside desktop shell (no browser tab).
+4. Onboarding checks/downloads components (`ffmpeg`, `whisper-cli`, default model).
+5. Queue, progress, cancel/retry, results and updates work the same as GUI mode.
+6. Auto-update stages new binary and applies it on next launch.
+
+### Release artifacts
+
+Tag release now produces:
+
+- CLI: `transcribe-cli_<version>_windows_amd64.zip` (and other targets from GoReleaser)
+- Desktop: `transcribe-desktop_<version>_windows_amd64.zip` (Wails shell)
+
+For end users who want app-like UX, distribute `transcribe-desktop_..._windows_amd64.zip`.
+
 ## Advanced queue flow
 
 1. Start daemon manually:
