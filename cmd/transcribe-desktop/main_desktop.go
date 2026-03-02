@@ -34,7 +34,7 @@ type desktopApp struct {
 func (d *desktopApp) startup(ctx context.Context) {
 	wailsruntime.WindowSetTitle(ctx, "Transcribe")
 	js := fmt.Sprintf(`window.__BACKEND_URL = %q; if (window.setBackendURL) window.setBackendURL(%q);`, d.uiURL, d.uiURL)
-	_ = wailsruntime.WindowExecJS(ctx, js)
+	wailsruntime.WindowExecJS(ctx, js)
 }
 
 func (d *desktopApp) shutdown(_ context.Context) {

@@ -74,19 +74,12 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Resolve desktop dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          go get github.com/wailsapp/wails/v2@latest
-          go get github.com/wailsapp/wails/v2/pkg/...@latest
-
       - name: Build desktop executable
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist-desktop
-          go build -tags desktop -ldflags "-s -w -X main.version=${GITHUB_REF_NAME} -H=windowsgui" -o dist-desktop/transcribe-desktop.exe ./cmd/transcribe-desktop
+          go build -mod=mod -tags desktop -ldflags "-s -w -X main.version=${GITHUB_REF_NAME} -H=windowsgui" -o dist-desktop/transcribe-desktop.exe ./cmd/transcribe-desktop
 
       - name: Pack desktop artifact
         shell: powershell
