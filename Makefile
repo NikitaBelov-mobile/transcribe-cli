@@ -9,7 +9,7 @@ BRANCH ?= main
 
 .DEFAULT_GOAL := help
 
-.PHONY: help clean check fmt test vet build-cli build-cli-current build-cli-all build-desktop-win \
+.PHONY: help clean check fmt test vet build-cli build-cli-current build-cli-all build-desktop-win build-desktop-winforms build-desktop-winui \
 	git-status git-commit git-push git-tag git-push-tag release-tag
 
 help: ## Show available tasks
@@ -48,7 +48,9 @@ build-cli-all: ## Build CLI for darwin/windows amd64+arm64
 		GOOS="$$os" GOARCH="$$arch" CGO_ENABLED=0 GOCACHE="$(GOCACHE)" $(GO) build -ldflags "-s -w" -o "$$out" ./cmd/transcribe-cli; \
 	done
 
-build-desktop-win: ## Build native Windows desktop bundle (TranscribeDesktop.exe + transcribe.exe)
+build-desktop-win: build-desktop-winui ## Build native Windows desktop bundle (WinUI + transcribe.exe)
+
+build-desktop-winforms: ## Build legacy WinForms desktop bundle (TranscribeDesktop.exe + transcribe.exe)
 	@command -v dotnet >/dev/null 2>&1 || { echo "dotnet is required for this task"; exit 1; }
 	mkdir -p "$(DESKTOP_DIST_DIR)/bundle"
 	GOCACHE="$(GOCACHE)" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 $(GO) build -ldflags "-s -w" -o "$(DESKTOP_DIST_DIR)/bundle/transcribe.exe" ./cmd/transcribe-cli
@@ -61,6 +63,20 @@ build-desktop-win: ## Build native Windows desktop bundle (TranscribeDesktop.exe
 		-o "$(DESKTOP_DIST_DIR)/publish"
 	cp "$(DESKTOP_DIST_DIR)/publish/TranscribeDesktop.exe" "$(DESKTOP_DIST_DIR)/bundle/TranscribeDesktop.exe"
 	@echo "Desktop bundle: $(DESKTOP_DIST_DIR)/bundle"
+
+build-desktop-winui: ## Build WinUI desktop bundle (TranscribeDesktop.WinUI.exe + transcribe.exe)
+	@command -v dotnet >/dev/null 2>&1 || { echo "dotnet is required for this task"; exit 1; }
+	mkdir -p "$(DESKTOP_DIST_DIR)/bundle-winui"
+	GOCACHE="$(GOCACHE)" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 $(GO) build -ldflags "-s -w" -o "$(DESKTOP_DIST_DIR)/bundle-winui/transcribe.exe" ./cmd/transcribe-cli
+	dotnet publish desktop-windows-winui/TranscribeDesktop.WinUI.csproj \
+		-c Release \
+		-r win-x64 \
+		--self-contained true \
+		-p:PublishSingleFile=true \
+		-p:IncludeNativeLibrariesForSelfExtract=true \
+		-o "$(DESKTOP_DIST_DIR)/publish-winui"
+	cp "$(DESKTOP_DIST_DIR)/publish-winui/TranscribeDesktop.WinUI.exe" "$(DESKTOP_DIST_DIR)/bundle-winui/TranscribeDesktop.exe"
+	@echo "WinUI desktop bundle: $(DESKTOP_DIST_DIR)/bundle-winui"
 
 git-status: ## Show short git status
 	git status --short --branch

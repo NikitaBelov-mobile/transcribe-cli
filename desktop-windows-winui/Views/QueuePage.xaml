@@ -1,0 +1,65 @@
+<Page
+    x:Class="TranscribeDesktop.WinUI.Views.QueuePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{StaticResource AppBackgroundBrush}">
+
+    <Grid Padding="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Queue" FontSize="28" FontWeight="Bold" Foreground="{StaticResource AppTextBrush}" />
+
+        <Grid Grid.Row="1" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="140" />
+                <ColumnDefinition Width="200" />
+                <ColumnDefinition Width="140" />
+                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Language" Foreground="#FFE2E8F0" />
+            <TextBox x:Name="LanguageBox" Grid.Column="1" Text="auto" />
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="12,0,0,0" Text="Model" Foreground="#FFE2E8F0" />
+            <TextBox x:Name="ModelBox" Grid.Column="3" Margin="12,0,0,0" />
+
+            <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="Add files" Click="AddFilesButton_Click" />
+                <Button Content="Refresh" Click="RefreshButton_Click" />
+                <Button Content="Cancel job" Click="CancelButton_Click" />
+                <Button Content="Retry job" Click="RetryButton_Click" />
+                <Button Content="Open result" Click="OpenResultButton_Click" />
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="2" Margin="0,14,0,0" Padding="16" Background="{StaticResource AppPanelBrush}" CornerRadius="12">
+            <ListView x:Name="JobsList" SelectionMode="Single">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="80" />
+                                <ColumnDefinition Width="190" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Id}" Foreground="#FFBAE6FD" />
+                            <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="#FFE2E8F0" />
+                            <TextBlock Grid.Column="2" Text="{Binding Progress}" Foreground="#FFE2E8F0" />
+                            <TextBlock Grid.Column="3" Text="{Binding Model}" Foreground="#FFE2E8F0" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="4" Text="{Binding FilePath}" Foreground="#FF94A3B8" TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Border>
+    </Grid>
+</Page>

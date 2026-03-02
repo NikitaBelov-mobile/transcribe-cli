@@ -83,11 +83,15 @@ UI opens on `http://127.0.0.1:9864/` (or your configured address) where you can:
 
 ## Windows native desktop app
 
-`TranscribeDesktop.exe` is a native WinForms app (not browser/WebView). It talks to local `transcribe.exe daemon` via localhost API.
+`TranscribeDesktop.exe` is a native WinUI 3 app (not browser/WebView). It talks to local `transcribe.exe daemon` via localhost API.
 
 How it works:
 1. Desktop app launches `transcribe.exe daemon run --addr 127.0.0.1:9864` in background.
-2. Onboarding ensures `ffmpeg`, `whisper-cli`, and default model are installed.
+2. Multi-screen onboarding includes:
+   - intro
+   - data sharing preferences
+   - runtime setup
+   - model preparation
 3. User adds audio/video files to queue in native GUI.
 4. Job list shows progress and supports cancel/retry.
 5. Update checks are available from GUI.
@@ -258,6 +262,7 @@ Required GitHub repo config:
   - `WINGET_PACKAGE_ID` (optional, e.g. `YourOrg.TranscribeCLI`)
 - Secrets:
   - `HOMEBREW_TAP_TOKEN` (optional)
+  - `WINGET_REPO_TOKEN` (optional)
 
 ## Makefile Tasks
 
@@ -280,4 +285,3 @@ make git-push-tag TAG=v0.3.11
 # or one-shot:
 make release-tag TAG=v0.3.11
 ```
-  - `WINGET_REPO_TOKEN` (optional)

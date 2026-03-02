@@ -1,0 +1,23 @@
+<Page
+    x:Class="TranscribeDesktop.WinUI.Views.Onboarding.OnboardingWelcomePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{StaticResource AppBackgroundBrush}">
+
+    <Grid Padding="28">
+        <Border Padding="24" Background="{StaticResource AppPanelBrush}" CornerRadius="12">
+            <StackPanel Spacing="14">
+                <TextBlock Text="Welcome to Transcribe Desktop" FontSize="30" FontWeight="Bold" Foreground="{StaticResource AppTextBrush}" />
+                <TextBlock Text="This onboarding is split into screens so users can configure data sharing, runtime bootstrap, and model preparation with minimal friction." TextWrapping="Wrap" Foreground="#FF94A3B8" />
+                <TextBlock Text="Steps:" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource AppTextBrush}" />
+                <TextBlock Text="1. Data sharing settings" Foreground="#FFE2E8F0" />
+                <TextBlock Text="2. Runtime setup (ffmpeg, whisper, default model)" Foreground="#FFE2E8F0" />
+                <TextBlock Text="3. Preferred model preparation" Foreground="#FFE2E8F0" />
+                <Button x:Name="NextButton" Margin="0,10,0,0" Content="Continue" HorizontalAlignment="Left" Click="NextButton_Click" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>

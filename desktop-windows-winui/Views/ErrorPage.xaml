@@ -1,0 +1,19 @@
+<Page
+    x:Class="TranscribeDesktop.WinUI.Views.ErrorPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{StaticResource AppBackgroundBrush}">
+
+    <Grid>
+        <Border Margin="28" Padding="24" Background="{StaticResource AppPanelBrush}" CornerRadius="12">
+            <StackPanel Spacing="12">
+                <TextBlock Text="Startup error" FontSize="28" FontWeight="Bold" Foreground="#FFF87171" />
+                <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Foreground="{StaticResource AppTextBrush}" />
+                <TextBlock Text="Check that transcribe.exe is present in the same folder as this app." Foreground="#FF94A3B8" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>

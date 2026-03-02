@@ -85,19 +85,20 @@ jobs:
           mkdir -p dist-desktop/bundle
           go build -mod=mod -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o dist-desktop/bundle/transcribe.exe ./cmd/transcribe-cli
 
-      - name: Publish native desktop GUI (WinForms)
+      - name: Publish native desktop GUI (WinUI 3)
         shell: bash
         run: |
           set -euo pipefail
-          dotnet publish desktop-windows/TranscribeDesktop.Windows.csproj \
+          dotnet publish desktop-windows-winui/TranscribeDesktop.WinUI.csproj \
             -c Release \
             -r win-x64 \
             --self-contained true \
             -p:PublishSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:WindowsAppSDKSelfContained=true \
             -p:Version=${GITHUB_REF_NAME#v} \
             -o dist-desktop/publish
-          cp dist-desktop/publish/TranscribeDesktop.exe dist-desktop/bundle/TranscribeDesktop.exe
+          cp dist-desktop/publish/TranscribeDesktop.WinUI.exe dist-desktop/bundle/TranscribeDesktop.exe
 
       - name: Pack desktop artifact
         shell: powershell

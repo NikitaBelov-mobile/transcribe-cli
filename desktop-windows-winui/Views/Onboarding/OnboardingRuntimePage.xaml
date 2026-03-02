@@ -1,0 +1,44 @@
+<Page
+    x:Class="TranscribeDesktop.WinUI.Views.Onboarding.OnboardingRuntimePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{StaticResource AppBackgroundBrush}">
+
+    <Grid Padding="28">
+        <Border Padding="24" Background="{StaticResource AppPanelBrush}" CornerRadius="12">
+            <StackPanel Spacing="14">
+                <TextBlock Text="Runtime setup" FontSize="30" FontWeight="Bold" Foreground="{StaticResource AppTextBrush}" />
+                <TextBlock Text="This step prepares ffmpeg, whisper-cli, and checks the default model. It can take a while on first run." TextWrapping="Wrap" Foreground="#FF94A3B8" />
+
+                <TextBlock x:Name="RuntimeSummary" Foreground="{StaticResource AppTextBrush}" />
+
+                <ListView x:Name="ComponentsList" Height="220">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Name}" Foreground="#FFE2E8F0" />
+                                <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="#FFBAE6FD" />
+                                <TextBlock Grid.Column="2" Text="{Binding Message}" Foreground="#FF94A3B8" TextWrapping="Wrap" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Content="Back" Click="BackButton_Click" />
+                    <Button Content="Start setup" Click="SetupButton_Click" />
+                    <Button Content="Refresh" Click="RefreshButton_Click" />
+                    <Button x:Name="NextButton" Content="Continue" IsEnabled="False" Click="NextButton_Click" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>

@@ -1,0 +1,33 @@
+<Page
+    x:Class="TranscribeDesktop.WinUI.Views.DashboardPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{StaticResource AppBackgroundBrush}">
+
+    <Grid Padding="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Dashboard" FontSize="28" FontWeight="Bold" Foreground="{StaticResource AppTextBrush}" />
+
+        <StackPanel Grid.Row="1" Margin="0,14,0,0" Orientation="Horizontal" Spacing="10">
+            <Button Content="Refresh" Click="RefreshButton_Click" />
+            <Button Content="Check updates" Click="CheckUpdatesButton_Click" />
+            <Button Content="Run runtime setup" Click="RunSetupButton_Click" />
+        </StackPanel>
+
+        <Border Grid.Row="2" Margin="0,14,0,0" Padding="16" Background="{StaticResource AppPanelBrush}" CornerRadius="12">
+            <StackPanel Spacing="10">
+                <TextBlock x:Name="HealthText" Foreground="#FFE2E8F0" />
+                <TextBlock x:Name="RuntimeText" Foreground="#FFE2E8F0" TextWrapping="Wrap" />
+                <TextBlock x:Name="UpdateText" Foreground="#FFE2E8F0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>
