@@ -74,8 +74,7 @@ build-desktop-winui: ## Build WinUI desktop bundle (TranscribeDesktop.WinUI.exe 
 		--self-contained true \
 		-p:Platform=x64 \
 		-p:PlatformTarget=x64 \
-		-p:PublishSingleFile=true \
-		-p:IncludeNativeLibrariesForSelfExtract=true \
+		-p:PublishSingleFile=false \
 		-p:EnableMsixTooling=true \
 		-o "$(DESKTOP_DIST_DIR)/publish-winui"
 	cp -R "$(DESKTOP_DIST_DIR)/publish-winui/." "$(DESKTOP_DIST_DIR)/bundle-winui/"

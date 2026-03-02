@@ -19,11 +19,14 @@ public sealed class AppServices : IDisposable
     public async Task InitializeAsync()
     {
         StateDirectory = ResolveStateDirectory();
+        StartupLog.Write("AppServices.InitializeAsync start");
         SettingsStore = new SettingsStore(StateDirectory);
         Settings = await SettingsStore.LoadAsync().ConfigureAwait(false);
 
         await Daemon.StartAsync(_lifetime.Token).ConfigureAwait(false);
+        StartupLog.Write($"Daemon ready at {Daemon.BaseUrl}, startedByApp={Daemon.StartedByApp}");
         Api = new TranscribeApiClient(Daemon.BaseUrl);
+        StartupLog.Write("API client initialized");
     }
 
     public Task SaveSettingsAsync()
@@ -39,7 +42,7 @@ public sealed class AppServices : IDisposable
         _lifetime.Dispose();
     }
 
-    private static string ResolveStateDirectory()
+    public static string ResolveStateDirectory()
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         if (string.IsNullOrWhiteSpace(appData))

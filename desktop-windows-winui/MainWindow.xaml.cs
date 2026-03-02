@@ -100,6 +100,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            TranscribeDesktop.WinUI.Services.StartupLog.Write(ex, "MainWindow.InitializeAsync");
             RootNav.IsEnabled = false;
             RootNav.IsPaneOpen = false;
             RootNav.IsPaneToggleButtonVisible = false;
