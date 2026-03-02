@@ -54,7 +54,7 @@ build-desktop-winforms: ## Build legacy WinForms desktop bundle (TranscribeDeskt
 	@command -v dotnet >/dev/null 2>&1 || { echo "dotnet is required for this task"; exit 1; }
 	mkdir -p "$(DESKTOP_DIST_DIR)/bundle"
 	GOCACHE="$(GOCACHE)" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 $(GO) build -ldflags "-s -w" -o "$(DESKTOP_DIST_DIR)/bundle/transcribe.exe" ./cmd/transcribe-cli
-	dotnet publish desktop-windows/TranscribeDesktop.Windows.csproj \
+	DOTNET_CLI_HOME="$(CURDIR)/.dotnet_cli_home" DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 dotnet publish desktop-windows/TranscribeDesktop.Windows.csproj \
 		-c Release \
 		-r win-x64 \
 		--self-contained true \
@@ -68,7 +68,7 @@ build-desktop-winui: ## Build WinUI desktop bundle (TranscribeDesktop.WinUI.exe 
 	@command -v dotnet >/dev/null 2>&1 || { echo "dotnet is required for this task"; exit 1; }
 	mkdir -p "$(DESKTOP_DIST_DIR)/bundle-winui"
 	GOCACHE="$(GOCACHE)" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 $(GO) build -ldflags "-s -w" -o "$(DESKTOP_DIST_DIR)/bundle-winui/transcribe.exe" ./cmd/transcribe-cli
-	dotnet publish desktop-windows-winui/TranscribeDesktop.WinUI.csproj \
+	DOTNET_CLI_HOME="$(CURDIR)/.dotnet_cli_home" DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 dotnet publish desktop-windows-winui/TranscribeDesktop.WinUI.csproj \
 		-c Release \
 		-r win-x64 \
 		--self-contained true \

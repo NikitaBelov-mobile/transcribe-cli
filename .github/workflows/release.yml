@@ -89,7 +89,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dotnet publish desktop-windows-winui/TranscribeDesktop.WinUI.csproj \
+          mkdir -p dist-desktop/logs
+          if ! dotnet publish desktop-windows-winui/TranscribeDesktop.WinUI.csproj \
             -c Release \
             -r win-x64 \
             --self-contained true \
@@ -100,8 +101,22 @@ jobs:
             -p:EnableMsixTooling=true \
             -p:WindowsAppSDKSelfContained=true \
             -p:Version=${GITHUB_REF_NAME#v} \
+            -bl:dist-desktop/logs/winui-publish.binlog \
+            -flp:logfile=dist-desktop/logs/winui-publish.log\;verbosity=diagnostic \
             -o dist-desktop/publish
+          then
+            echo "WinUI publish failed; showing diagnostic log tail:"
+            tail -n 240 dist-desktop/logs/winui-publish.log || true
+            exit 1
+          fi
           cp dist-desktop/publish/TranscribeDesktop.WinUI.exe dist-desktop/bundle/TranscribeDesktop.exe
+
+      - name: Upload WinUI diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: winui-diagnostics-${{ github.run_id }}
+          path: dist-desktop/logs/*
 
       - name: Pack desktop artifact
         shell: powershell

@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Graphics;
 using TranscribeDesktop.WinUI.Views;
 using TranscribeDesktop.WinUI.Views.Onboarding;
 
@@ -23,6 +25,7 @@ public sealed partial class MainWindow : Window
         _app = app;
         Current = this;
         InitializeComponent();
+        InitializeWindowBounds();
 
         Closed += MainWindow_Closed;
         _ = InitializeAsync();
@@ -139,5 +142,20 @@ public sealed partial class MainWindow : Window
     private void MainWindow_Closed(object sender, WindowEventArgs args)
     {
         Services.Dispose();
+    }
+
+    private void InitializeWindowBounds()
+    {
+        try
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
+            var appWindow = AppWindow.GetFromWindowId(windowId);
+            appWindow.Resize(new SizeInt32(1320, 900));
+        }
+        catch
+        {
+            // If resize API is unavailable, app will use default size.
+        }
     }
 }
