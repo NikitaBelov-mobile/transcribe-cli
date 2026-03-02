@@ -223,9 +223,12 @@ function refreshModelsUI() {
   const presetSelect = document.getElementById('presetSelect');
   presetSelect.innerHTML = '';
   for (const p of state.presets) {
+    const name = p.name || p.Name || '';
+    const alias = p.alias || p.Alias || name;
+    if (!name) continue;
     const o = document.createElement('option');
-    o.value = p.name;
-    o.textContent = p.alias + ' (' + p.name + ')';
+    o.value = name;
+    o.textContent = alias + ' (' + name + ')';
     presetSelect.appendChild(o);
   }
 }

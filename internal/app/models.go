@@ -13,9 +13,9 @@ import (
 
 // PresetModel defines a known downloadable whisper model.
 type PresetModel struct {
-	Alias string
-	Name  string
-	URL   string
+	Alias string `json:"alias"`
+	Name  string `json:"name"`
+	URL   string `json:"url"`
 }
 
 var presetModels = []PresetModel{
