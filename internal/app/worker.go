@@ -3,12 +3,15 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -108,7 +111,13 @@ func (d *Daemon) processJob(ctx context.Context, id string) {
 }
 
 func (d *Daemon) runTranscription(ctx context.Context, job *Job) (string, string, string, error) {
-	tempDir, err := os.MkdirTemp("", "transcribe-cli-*")
+	tempRoot := ""
+	if runtime.GOOS == "windows" {
+		if dir, dirErr := ensureWindowsASCIIDir("tmp"); dirErr == nil {
+			tempRoot = dir
+		}
+	}
+	tempDir, err := os.MkdirTemp(tempRoot, "transcribe-cli-*")
 	if err != nil {
 		return "", "", "", err
 	}
@@ -192,14 +201,20 @@ func (d *Daemon) runTranscription(ctx context.Context, job *Job) (string, string
 
 func (d *Daemon) extractAudio(ctx context.Context, inputPath, outputPath string) error {
 	cfg := d.currentConfig()
+	inputArg := normalizePathForExternalTool(inputPath)
+	outputArg := outputPath
+	if runtime.GOOS == "windows" {
+		// outputPath is created under ASCII temp root in runTranscription.
+		outputArg = normalizePathForExternalTool(outputPath)
+	}
 	cmd := exec.CommandContext(ctx, cfg.FFmpegBinary,
 		"-y",
-		"-i", inputPath,
+		"-i", inputArg,
 		"-vn",
 		"-ac", "1",
 		"-ar", "16000",
 		"-f", "wav",
-		outputPath,
+		outputArg,
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -214,14 +229,24 @@ func (d *Daemon) runWhisper(ctx context.Context, wavPath, outputBase, language, 
 	if err != nil {
 		return err
 	}
+	modelPath, err = ensureWhisperReadableModelPath(modelPath)
+	if err != nil {
+		return err
+	}
+
+	wavArg := normalizePathForExternalTool(wavPath)
+	outputArg := outputBase
+	if runtime.GOOS == "windows" {
+		outputArg = normalizePathForExternalTool(outputBase)
+	}
 
 	args := []string{
 		"-m", modelPath,
-		"-f", wavPath,
+		"-f", wavArg,
 		"-otxt",
 		"-osrt",
 		"-ovtt",
-		"-of", outputBase,
+		"-of", outputArg,
 	}
 	language = strings.TrimSpace(language)
 	if language != "" && language != "auto" {
@@ -325,4 +350,101 @@ func copyIfExists(src, dst string) error {
 		return err
 	}
 	return copyFile(src, dst)
+}
+
+func normalizePathForExternalTool(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" || runtime.GOOS != "windows" {
+		return path
+	}
+	if isASCII(path) {
+		return path
+	}
+	short, err := tryWindowsShortPath(path)
+	if err == nil && strings.TrimSpace(short) != "" {
+		return short
+	}
+	return path
+}
+
+func ensureWhisperReadableModelPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" || runtime.GOOS != "windows" {
+		return path, nil
+	}
+	if isASCII(path) {
+		return path, nil
+	}
+
+	short := normalizePathForExternalTool(path)
+	if isASCII(short) {
+		return short, nil
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+
+	cacheDir, err := ensureWindowsASCIIDir(filepath.Join("cache", "models"))
+	if err != nil {
+		return "", err
+	}
+	key := fmt.Sprintf("%s|%d|%d", path, info.Size(), info.ModTime().UnixNano())
+	sum := sha1.Sum([]byte(key))
+	base := filepath.Base(path)
+	base = strings.TrimSpace(base)
+	if base == "" || !isASCII(base) {
+		base = "model.bin"
+	}
+	dst := filepath.Join(cacheDir, hex.EncodeToString(sum[:12])+"-"+base)
+	if fileExists(dst) {
+		return dst, nil
+	}
+	if err := copyFile(path, dst); err != nil {
+		return "", err
+	}
+	return dst, nil
+}
+
+func ensureWindowsASCIIDir(sub string) (string, error) {
+	sub = strings.TrimSpace(sub)
+	roots := []string{}
+	if env := strings.TrimSpace(os.Getenv("TRANSCRIBE_CLI_ASCII_DIR")); env != "" {
+		roots = append(roots, env)
+	}
+	if pd := strings.TrimSpace(os.Getenv("ProgramData")); pd != "" {
+		roots = append(roots, filepath.Join(pd, "TranscribeCLI"))
+	}
+	roots = append(roots, filepath.Join("C:\\", "ProgramData", "TranscribeCLI"))
+	roots = append(roots, filepath.Join("C:\\", "TranscribeCLI"))
+
+	var lastErr error
+	for _, root := range roots {
+		if strings.TrimSpace(root) == "" || !isASCII(root) {
+			continue
+		}
+		dir := root
+		if sub != "" {
+			dir = filepath.Join(root, sub)
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			lastErr = err
+			continue
+		}
+		return dir, nil
+	}
+	if lastErr != nil {
+		return "", lastErr
+	}
+	return "", errors.New("failed to create ASCII runtime directory on Windows")
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] > 127 {
+			return false
+		}
+	}
+	return true
 }
