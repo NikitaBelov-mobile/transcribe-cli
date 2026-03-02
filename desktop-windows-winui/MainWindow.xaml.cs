@@ -1,9 +1,7 @@
 using System;
 using System.Threading.Tasks;
-using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Windows.Graphics;
 using TranscribeDesktop.WinUI.Views;
 using TranscribeDesktop.WinUI.Views.Onboarding;
 
@@ -14,7 +12,7 @@ public sealed partial class MainWindow : Window
     private readonly App _app;
     private bool _initialized;
 
-    public static MainWindow? Current { get; private set; }
+    public static MainWindow? Instance { get; private set; }
 
     public Services.AppServices Services => _app.Services;
 
@@ -23,9 +21,8 @@ public sealed partial class MainWindow : Window
     public MainWindow(App app)
     {
         _app = app;
-        Current = this;
+        Instance = this;
         InitializeComponent();
-        InitializeWindowBounds();
 
         Closed += MainWindow_Closed;
         _ = InitializeAsync();
@@ -35,7 +32,7 @@ public sealed partial class MainWindow : Window
     {
         StatusText.Text = text;
         StatusText.Foreground = isError
-            ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Color.FromArgb(255, 248, 113, 113))
+            ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 248, 113, 113))
             : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AppTextBrush"];
     }
 
@@ -46,7 +43,8 @@ public sealed partial class MainWindow : Window
 
         IsOnboardingMode = false;
         RootNav.IsEnabled = true;
-        RootNav.IsPaneVisible = true;
+        RootNav.IsPaneOpen = true;
+        RootNav.IsPaneToggleButtonVisible = true;
         RootNav.SelectedItem = RootNav.MenuItems[0];
         MainFrame.Navigate(typeof(DashboardPage));
         SetStatus("Onboarding completed. App is ready.");
@@ -142,20 +140,5 @@ public sealed partial class MainWindow : Window
     private void MainWindow_Closed(object sender, WindowEventArgs args)
     {
         Services.Dispose();
-    }
-
-    private void InitializeWindowBounds()
-    {
-        try
-        {
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
-            var appWindow = AppWindow.GetFromWindowId(windowId);
-            appWindow.Resize(new SizeInt32(1320, 900));
-        }
-        catch
-        {
-            // If resize API is unavailable, app will use default size.
-        }
     }
 }

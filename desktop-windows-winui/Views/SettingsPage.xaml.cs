@@ -9,7 +9,7 @@ public sealed partial class SettingsPage : Page
     {
         InitializeComponent();
 
-        var services = MainWindow.Current?.Services;
+        var services = MainWindow.Instance?.Services;
         if (services is null)
         {
             return;
@@ -22,7 +22,7 @@ public sealed partial class SettingsPage : Page
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        if (MainWindow.Current is not { } window)
+        if (MainWindow.Instance is not { } window)
         {
             return;
         }
@@ -34,7 +34,7 @@ public sealed partial class SettingsPage : Page
 
     private async void RestartOnboardingButton_Click(object sender, RoutedEventArgs e)
     {
-        if (MainWindow.Current is not { } window)
+        if (MainWindow.Instance is not { } window)
         {
             return;
         }

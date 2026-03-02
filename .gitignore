@@ -4,6 +4,7 @@ dist/
 !cmd/transcribe-desktop/frontend/dist/index.html
 .cache/
 .gocache/
+.dotnet_cli_home/
 .state/
 *.exe
 *.zip

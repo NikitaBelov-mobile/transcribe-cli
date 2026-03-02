@@ -10,13 +10,13 @@ public sealed partial class OnboardingRuntimePage : Page
     public OnboardingRuntimePage()
     {
         InitializeComponent();
-        MainWindow.Current?.SetStatus("Onboarding step 3/4: runtime setup");
+        MainWindow.Instance?.SetStatus("Onboarding step 3/4: runtime setup");
         _ = RefreshStatusAsync();
     }
 
     private async System.Threading.Tasks.Task RefreshStatusAsync()
     {
-        var window = MainWindow.Current;
+        var window = MainWindow.Instance;
         var api = window?.Services.Api;
         if (api is null)
         {
@@ -63,7 +63,7 @@ public sealed partial class OnboardingRuntimePage : Page
 
     private async void SetupButton_Click(object sender, RoutedEventArgs e)
     {
-        var api = MainWindow.Current?.Services.Api;
+        var api = MainWindow.Instance?.Services.Api;
         if (api is null)
         {
             return;
@@ -71,13 +71,13 @@ public sealed partial class OnboardingRuntimePage : Page
 
         try
         {
-            MainWindow.Current?.SetStatus("Starting runtime bootstrap...");
+            MainWindow.Instance?.SetStatus("Starting runtime bootstrap...");
             await api.EnsureBootstrapAsync(default);
             await RefreshStatusAsync();
         }
         catch (System.Exception ex)
         {
-            MainWindow.Current?.SetStatus("Runtime bootstrap failed: " + ex.Message, isError: true);
+            MainWindow.Instance?.SetStatus("Runtime bootstrap failed: " + ex.Message, isError: true);
         }
     }
 
@@ -88,12 +88,12 @@ public sealed partial class OnboardingRuntimePage : Page
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
-        MainWindow.Current?.NavigateOnboardingStep("privacy");
+        MainWindow.Instance?.NavigateOnboardingStep("privacy");
     }
 
     private void NextButton_Click(object sender, RoutedEventArgs e)
     {
-        MainWindow.Current?.NavigateOnboardingStep("models");
+        MainWindow.Instance?.NavigateOnboardingStep("models");
     }
 
     private sealed class ComponentItem

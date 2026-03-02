@@ -12,13 +12,13 @@ public sealed partial class OnboardingModelPage : Page
     public OnboardingModelPage()
     {
         InitializeComponent();
-        MainWindow.Current?.SetStatus("Onboarding step 4/4: model preparation");
+        MainWindow.Instance?.SetStatus("Onboarding step 4/4: model preparation");
         _ = RefreshAsync();
     }
 
     private async System.Threading.Tasks.Task RefreshAsync()
     {
-        var api = MainWindow.Current?.Services.Api;
+        var api = MainWindow.Instance?.Services.Api;
         if (api is null)
         {
             return;
@@ -48,13 +48,13 @@ public sealed partial class OnboardingModelPage : Page
         }
         catch (System.Exception ex)
         {
-            MainWindow.Current?.SetStatus("Failed to load model info: " + ex.Message, isError: true);
+            MainWindow.Instance?.SetStatus("Failed to load model info: " + ex.Message, isError: true);
         }
     }
 
     private async void InstallButton_Click(object sender, RoutedEventArgs e)
     {
-        var api = MainWindow.Current?.Services.Api;
+        var api = MainWindow.Instance?.Services.Api;
         if (api is null)
         {
             return;
@@ -68,11 +68,11 @@ public sealed partial class OnboardingModelPage : Page
 
         try
         {
-            MainWindow.Current?.SetStatus("Installing model preset: " + selected.Name);
+            MainWindow.Instance?.SetStatus("Installing model preset: " + selected.Name);
             await api.InstallModelAsync(selected.Name, default);
             await api.SetDefaultModelAsync(selected.Name, default);
 
-            var window = MainWindow.Current;
+            var window = MainWindow.Instance;
             if (window is not null)
             {
                 window.Services.Settings.PreferredModel = selected.Name;
@@ -80,11 +80,11 @@ public sealed partial class OnboardingModelPage : Page
             }
 
             await RefreshAsync();
-            MainWindow.Current?.SetStatus("Model installed: " + selected.Name);
+            MainWindow.Instance?.SetStatus("Model installed: " + selected.Name);
         }
         catch (System.Exception ex)
         {
-            MainWindow.Current?.SetStatus("Model install failed: " + ex.Message, isError: true);
+            MainWindow.Instance?.SetStatus("Model install failed: " + ex.Message, isError: true);
         }
     }
 
@@ -95,12 +95,12 @@ public sealed partial class OnboardingModelPage : Page
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
-        MainWindow.Current?.NavigateOnboardingStep("runtime");
+        MainWindow.Instance?.NavigateOnboardingStep("runtime");
     }
 
     private async void FinishButton_Click(object sender, RoutedEventArgs e)
     {
-        if (MainWindow.Current is { } window)
+        if (MainWindow.Instance is { } window)
         {
             await window.CompleteOnboardingAsync();
         }

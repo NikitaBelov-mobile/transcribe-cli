@@ -8,11 +8,11 @@ public sealed partial class OnboardingWelcomePage : Page
     public OnboardingWelcomePage()
     {
         InitializeComponent();
-        MainWindow.Current?.SetStatus("Onboarding step 1/4: introduction");
+        MainWindow.Instance?.SetStatus("Onboarding step 1/4: introduction");
     }
 
     private void NextButton_Click(object sender, RoutedEventArgs e)
     {
-        MainWindow.Current?.NavigateOnboardingStep("privacy");
+        MainWindow.Instance?.NavigateOnboardingStep("privacy");
     }
 }

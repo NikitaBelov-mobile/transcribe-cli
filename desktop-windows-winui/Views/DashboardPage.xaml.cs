@@ -14,7 +14,7 @@ public sealed partial class DashboardPage : Page
 
     private async System.Threading.Tasks.Task RefreshAsync()
     {
-        var api = MainWindow.Current?.Services.Api;
+        var api = MainWindow.Instance?.Services.Api;
         if (api is null)
         {
             return;
@@ -37,11 +37,11 @@ public sealed partial class DashboardPage : Page
                 ? $"Update: current={update.CurrentVersion}, latest={update.LatestVersion}, available={update.UpdateAvailable}, message={update.Message}, error={update.Error}"
                 : "Update: disabled";
 
-            MainWindow.Current?.SetStatus("Dashboard refreshed");
+            MainWindow.Instance?.SetStatus("Dashboard refreshed");
         }
         catch (System.Exception ex)
         {
-            MainWindow.Current?.SetStatus("Dashboard refresh failed: " + ex.Message, isError: true);
+            MainWindow.Instance?.SetStatus("Dashboard refresh failed: " + ex.Message, isError: true);
         }
     }
 
@@ -52,7 +52,7 @@ public sealed partial class DashboardPage : Page
 
     private async void CheckUpdatesButton_Click(object sender, RoutedEventArgs e)
     {
-        var api = MainWindow.Current?.Services.Api;
+        var api = MainWindow.Instance?.Services.Api;
         if (api is null)
         {
             return;
@@ -65,13 +65,13 @@ public sealed partial class DashboardPage : Page
         }
         catch (System.Exception ex)
         {
-            MainWindow.Current?.SetStatus("Update check failed: " + ex.Message, isError: true);
+            MainWindow.Instance?.SetStatus("Update check failed: " + ex.Message, isError: true);
         }
     }
 
     private async void RunSetupButton_Click(object sender, RoutedEventArgs e)
     {
-        var api = MainWindow.Current?.Services.Api;
+        var api = MainWindow.Instance?.Services.Api;
         if (api is null)
         {
             return;
@@ -84,7 +84,7 @@ public sealed partial class DashboardPage : Page
         }
         catch (System.Exception ex)
         {
-            MainWindow.Current?.SetStatus("Runtime setup failed: " + ex.Message, isError: true);
+            MainWindow.Instance?.SetStatus("Runtime setup failed: " + ex.Message, isError: true);
         }
     }
 }

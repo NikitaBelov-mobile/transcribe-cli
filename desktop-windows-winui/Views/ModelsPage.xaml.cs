@@ -18,7 +18,7 @@ public sealed partial class ModelsPage : Page
 
     private async System.Threading.Tasks.Task RefreshAsync()
     {
-        var api = MainWindow.Current?.Services.Api;
+        var api = MainWindow.Instance?.Services.Api;
         if (api is null)
         {
             return;
@@ -65,17 +65,17 @@ public sealed partial class ModelsPage : Page
                 PresetCombo.SelectedIndex = 0;
             }
 
-            MainWindow.Current?.SetStatus("Models refreshed");
+            MainWindow.Instance?.SetStatus("Models refreshed");
         }
         catch (System.Exception ex)
         {
-            MainWindow.Current?.SetStatus("Failed to refresh models: " + ex.Message, isError: true);
+            MainWindow.Instance?.SetStatus("Failed to refresh models: " + ex.Message, isError: true);
         }
     }
 
     private async void SetDefaultButton_Click(object sender, RoutedEventArgs e)
     {
-        var api = MainWindow.Current?.Services.Api;
+        var api = MainWindow.Instance?.Services.Api;
         if (api is null)
         {
             return;
@@ -88,19 +88,19 @@ public sealed partial class ModelsPage : Page
         try
         {
             await api.SetDefaultModelAsync(model, default);
-            MainWindow.Current!.Services.Settings.PreferredModel = model;
-            await MainWindow.Current.Services.SaveSettingsAsync();
+            MainWindow.Instance!.Services.Settings.PreferredModel = model;
+            await MainWindow.Instance.Services.SaveSettingsAsync();
             await RefreshAsync();
         }
         catch (System.Exception ex)
         {
-            MainWindow.Current?.SetStatus("Set default failed: " + ex.Message, isError: true);
+            MainWindow.Instance?.SetStatus("Set default failed: " + ex.Message, isError: true);
         }
     }
 
     private async void InstallButton_Click(object sender, RoutedEventArgs e)
     {
-        var api = MainWindow.Current?.Services.Api;
+        var api = MainWindow.Instance?.Services.Api;
         if (api is null)
         {
             return;
@@ -112,16 +112,16 @@ public sealed partial class ModelsPage : Page
 
         try
         {
-            MainWindow.Current?.SetStatus("Installing model: " + preset.Name);
+            MainWindow.Instance?.SetStatus("Installing model: " + preset.Name);
             await api.InstallModelAsync(preset.Name, default);
             await api.SetDefaultModelAsync(preset.Name, default);
-            MainWindow.Current!.Services.Settings.PreferredModel = preset.Name;
-            await MainWindow.Current.Services.SaveSettingsAsync();
+            MainWindow.Instance!.Services.Settings.PreferredModel = preset.Name;
+            await MainWindow.Instance.Services.SaveSettingsAsync();
             await RefreshAsync();
         }
         catch (System.Exception ex)
         {
-            MainWindow.Current?.SetStatus("Install failed: " + ex.Message, isError: true);
+            MainWindow.Instance?.SetStatus("Install failed: " + ex.Message, isError: true);
         }
     }
 

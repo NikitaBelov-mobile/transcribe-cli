@@ -18,14 +18,14 @@ public sealed partial class QueuePage : Page
     {
         InitializeComponent();
 
-        var preferred = MainWindow.Current?.Services.Settings.PreferredModel;
+        var preferred = MainWindow.Instance?.Services.Settings.PreferredModel;
         ModelBox.Text = string.IsNullOrWhiteSpace(preferred) ? "ggml-large-v3-turbo" : preferred;
         _ = RefreshAsync();
     }
 
     private async System.Threading.Tasks.Task RefreshAsync()
     {
-        var api = MainWindow.Current?.Services.Api;
+        var api = MainWindow.Instance?.Services.Api;
         if (api is null)
         {
             return;
@@ -58,24 +58,24 @@ public sealed partial class QueuePage : Page
                 JobsList.SelectedItem = _jobs.FirstOrDefault(x => string.Equals(x.Id, selectedId, StringComparison.OrdinalIgnoreCase));
             }
 
-            MainWindow.Current?.SetStatus("Queue refreshed");
+            MainWindow.Instance?.SetStatus("Queue refreshed");
         }
         catch (Exception ex)
         {
-            MainWindow.Current?.SetStatus("Queue refresh failed: " + ex.Message, isError: true);
+            MainWindow.Instance?.SetStatus("Queue refresh failed: " + ex.Message, isError: true);
         }
     }
 
     private async void AddFilesButton_Click(object sender, RoutedEventArgs e)
     {
-        var api = MainWindow.Current?.Services.Api;
-        if (api is null || MainWindow.Current is null)
+        var api = MainWindow.Instance?.Services.Api;
+        if (api is null || MainWindow.Instance is null)
         {
             return;
         }
 
         var picker = new FileOpenPicker();
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Current);
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Instance);
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
         picker.FileTypeFilter.Add("*");
 
@@ -86,7 +86,7 @@ public sealed partial class QueuePage : Page
         }
         catch (Exception ex)
         {
-            MainWindow.Current.SetStatus("File picker failed: " + ex.Message, isError: true);
+            MainWindow.Instance.SetStatus("File picker failed: " + ex.Message, isError: true);
             return;
         }
 
@@ -100,7 +100,7 @@ public sealed partial class QueuePage : Page
 
         try
         {
-            MainWindow.Current.SetStatus($"Queueing {files.Count} file(s)...");
+            MainWindow.Instance.SetStatus($"Queueing {files.Count} file(s)...");
             foreach (var file in files)
             {
                 await api.AddJobAsync(new Services.AddJobRequest
@@ -112,11 +112,11 @@ public sealed partial class QueuePage : Page
             }
 
             await RefreshAsync();
-            MainWindow.Current.SetStatus("Files queued");
+            MainWindow.Instance.SetStatus("Files queued");
         }
         catch (Exception ex)
         {
-            MainWindow.Current.SetStatus("Queueing failed: " + ex.Message, isError: true);
+            MainWindow.Instance.SetStatus("Queueing failed: " + ex.Message, isError: true);
         }
     }
 
@@ -158,12 +158,12 @@ public sealed partial class QueuePage : Page
             return;
         }
 
-        MainWindow.Current?.SetStatus("Result is not available yet", isError: true);
+        MainWindow.Instance?.SetStatus("Result is not available yet", isError: true);
     }
 
     private async System.Threading.Tasks.Task ChangeSelectedJobAsync(bool isRetry)
     {
-        var api = MainWindow.Current?.Services.Api;
+        var api = MainWindow.Instance?.Services.Api;
         var selected = JobsList.SelectedItem as JobItem;
         if (api is null || selected is null || string.IsNullOrWhiteSpace(selected.Id))
         {
@@ -175,18 +175,18 @@ public sealed partial class QueuePage : Page
             if (isRetry)
             {
                 await api.RetryJobAsync(selected.Id, default);
-                MainWindow.Current?.SetStatus("Job re-queued: " + selected.Id);
+                MainWindow.Instance?.SetStatus("Job re-queued: " + selected.Id);
             }
             else
             {
                 await api.CancelJobAsync(selected.Id, default);
-                MainWindow.Current?.SetStatus("Job canceled: " + selected.Id);
+                MainWindow.Instance?.SetStatus("Job canceled: " + selected.Id);
             }
             await RefreshAsync();
         }
         catch (Exception ex)
         {
-            MainWindow.Current?.SetStatus("Job action failed: " + ex.Message, isError: true);
+            MainWindow.Instance?.SetStatus("Job action failed: " + ex.Message, isError: true);
         }
     }
 
