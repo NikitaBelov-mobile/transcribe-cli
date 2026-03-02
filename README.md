@@ -3,9 +3,8 @@
 Offline CLI tool for audio/video transcription on macOS and Windows.
 
 - Full local processing (no server required)
-- Queue-based processing through a local daemon
-- Progress checks via `queue status` and `queue watch`
-- Queue control via `queue cancel` and `queue retry`
+- Simple one-shot mode: `init` + `run`
+- Advanced queue mode with progress/cancel/retry
 - Model management via `model presets/current/use/install/remove`
 - Outputs: `txt`, `srt`, `vtt`
 
@@ -28,79 +27,57 @@ go build -o transcribe ./cmd/transcribe-cli
 
 Download from GitHub Releases and add binary to PATH.
 
-Planned package channels:
+## Easiest flow (recommended)
 
-- macOS: Homebrew tap
-- Windows: winget
-
-## Quick start
-
-1. Initialize local directories:
+1. Prepare environment and model:
 
 ```bash
-transcribe setup
+transcribe init
 ```
 
-2. See available preset models:
+2. Transcribe file (daemon starts automatically if needed):
 
 ```bash
-transcribe model presets
+transcribe run ./sample.mp4 --lang ru --model ggml-base
 ```
 
-3. Install a model:
+`run` waits for completion and prints output file paths.
 
-```bash
-transcribe model install --name ggml-base
-```
+## Advanced queue flow
 
-Aliases like `base`, `small`, `medium`, `large` are also supported.
-
-4. (Optional) set default model:
-
-```bash
-transcribe model use ggml-base
-transcribe model current
-```
-
-5. Start daemon in terminal #1:
+1. Start daemon manually:
 
 ```bash
 transcribe daemon run
 ```
 
-6. Queue file in terminal #2 (flags can be before or after file path):
+2. Add a job:
 
 ```bash
 transcribe queue add --lang ru --model ggml-base ./sample.mp4
-# also works:
-transcribe queue add ./sample.mp4 --lang ru --model ggml-base
 ```
 
-7. Watch progress:
+3. Watch job:
 
 ```bash
 transcribe queue watch <job-id>
 ```
 
-8. Cancel or retry a job:
+4. Cancel or retry:
 
 ```bash
 transcribe queue cancel <job-id>
 transcribe queue retry <job-id>
 ```
 
-9. List all jobs:
-
-```bash
-transcribe queue list
-```
-
 ## Commands
 
 ```bash
+transcribe init [--model ggml-base] [--skip-model]
+transcribe run [--lang auto] [--model ggml-base] [--output-dir ./out] [--no-watch] [--interval 2s] <file>
+
 transcribe setup
 transcribe doctor
-
 transcribe daemon run [--addr 127.0.0.1:9864] [--workers 4] [--queue-size 16]
 
 transcribe model list

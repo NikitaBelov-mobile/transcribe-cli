@@ -29,6 +29,10 @@ func main() {
 
 	var err error
 	switch os.Args[1] {
+	case "init":
+		err = runInit(cfg, os.Args[2:])
+	case "run":
+		err = runRun(cfg, os.Args[2:])
 	case "daemon":
 		err = runDaemon(cfg, os.Args[2:])
 	case "queue":
@@ -82,6 +86,107 @@ func runDaemon(cfg app.Config, args []string) error {
 	fmt.Printf("State: %s\n", cfg.StateDir)
 	fmt.Printf("Default model: %s\n", cfg.DefaultModel)
 	return daemon.Run(ctx)
+}
+
+func runInit(cfg app.Config, args []string) error {
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	model := fs.String("model", cfg.DefaultModel, "default model name (alias or ggml-*)")
+	skipModel := fs.Bool("skip-model", false, "skip model installation/check")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if err := app.EnsureStateDirs(cfg); err != nil {
+		return err
+	}
+
+	selectedModel := cfgSafeDefaultModel(*model)
+	if !filepath.IsAbs(selectedModel) && !strings.ContainsRune(selectedModel, os.PathSeparator) {
+		if err := saveDefaultModel(cfg, selectedModel); err != nil {
+			return err
+		}
+	}
+
+	fmt.Printf("State directory: %s\n", cfg.StateDir)
+	fmt.Printf("Models directory: %s\n", cfg.ModelsDir)
+	fmt.Printf("Default model: %s\n", selectedModel)
+
+	if _, err := exec.LookPath(cfg.FFmpegBinary); err != nil {
+		fmt.Printf("ffmpeg: missing (%s)\n", cfg.FFmpegBinary)
+		fmt.Println("Install ffmpeg and rerun `transcribe init`.")
+	} else {
+		fmt.Printf("ffmpeg: ok (%s)\n", cfg.FFmpegBinary)
+	}
+	if _, err := exec.LookPath(cfg.WhisperBinary); err != nil {
+		fmt.Printf("whisper: missing (%s)\n", cfg.WhisperBinary)
+		fmt.Println("Install whisper-cli and rerun `transcribe init`.")
+	} else {
+		fmt.Printf("whisper: ok (%s)\n", cfg.WhisperBinary)
+	}
+
+	if *skipModel {
+		fmt.Println("Model check skipped (--skip-model).")
+		fmt.Println("Init complete.")
+		return nil
+	}
+
+	modelCfg := cfg
+	modelCfg.DefaultModel = selectedModel
+	if path, err := app.ResolveModelPath(modelCfg, selectedModel); err == nil {
+		fmt.Printf("Model: ok (%s)\n", path)
+		fmt.Println("Init complete.")
+		return nil
+	}
+
+	fmt.Printf("Model %s not found, downloading...\n", selectedModel)
+	path, err := app.InstallModel(cfg, selectedModel, "", os.Stdout)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Model installed: %s\n", path)
+	fmt.Println("Init complete.")
+	return nil
+}
+
+func runRun(cfg app.Config, args []string) error {
+	fileArg, language, model, outputDir, watch, watchInterval, err := parseRunArgs(args, cfg.DefaultModel)
+	if err != nil {
+		return err
+	}
+
+	filePath, err := filepath.Abs(fileArg)
+	if err != nil {
+		return err
+	}
+
+	stopDaemon, startedDaemon, err := ensureDaemonRunning(cfg)
+	if err != nil {
+		return err
+	}
+	if startedDaemon {
+		fmt.Println("Daemon was not running, started temporary local daemon.")
+	}
+	defer stopDaemon()
+
+	client := app.NewClient(cfg.ClientBaseURL)
+	job, err := client.AddJob(app.AddJobRequest{
+		FilePath:  filePath,
+		OutputDir: outputDir,
+		Language:  language,
+		Model:     model,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Queued: %s\n", job.ID)
+	fmt.Printf("Status: %s (%d%%)\n", job.Status, job.Progress)
+	fmt.Printf("Model: %s\n", job.Model)
+
+	if !watch {
+		return nil
+	}
+	return watchJob(client, job.ID, watchInterval)
 }
 
 func runQueue(cfg app.Config, args []string) error {
@@ -249,6 +354,113 @@ func parseQueueAddArgs(args []string, defaultModel string) (filePath string, lan
 	return filePath, language, model, strings.TrimSpace(outputDir), nil
 }
 
+func parseRunArgs(args []string, defaultModel string) (filePath string, language string, model string, outputDir string, watch bool, watchInterval time.Duration, err error) {
+	watch = true
+	watchInterval = 2 * time.Second
+
+	normalized := make([]string, 0, len(args))
+	readValue := func(current string, i *int) (string, error) {
+		if strings.Contains(current, "=") {
+			parts := strings.SplitN(current, "=", 2)
+			return strings.TrimSpace(parts[1]), nil
+		}
+		if *i+1 >= len(args) {
+			return "", fmt.Errorf("missing value for %s", current)
+		}
+		*i = *i + 1
+		return strings.TrimSpace(args[*i]), nil
+	}
+
+	for i := 0; i < len(args); i++ {
+		token := strings.TrimSpace(args[i])
+		switch {
+		case token == "--no-watch":
+			watch = false
+		case token == "--watch":
+			watch = true
+		case token == "--interval" || strings.HasPrefix(token, "--interval="):
+			value, parseErr := readValue(token, &i)
+			if parseErr != nil {
+				return "", "", "", "", false, 0, parseErr
+			}
+			parsed, parseErr := time.ParseDuration(value)
+			if parseErr != nil {
+				return "", "", "", "", false, 0, fmt.Errorf("invalid --interval: %w", parseErr)
+			}
+			if parsed <= 0 {
+				return "", "", "", "", false, 0, errors.New("--interval must be > 0")
+			}
+			watchInterval = parsed
+		default:
+			normalized = append(normalized, token)
+		}
+	}
+
+	filePath, language, model, outputDir, err = parseQueueAddArgs(normalized, defaultModel)
+	return filePath, language, model, outputDir, watch, watchInterval, err
+}
+
+func ensureDaemonRunning(cfg app.Config) (stop func(), started bool, err error) {
+	client := app.NewClient(cfg.ClientBaseURL)
+	if err := client.Health(); err == nil {
+		return func() {}, false, nil
+	}
+
+	daemon, err := app.NewDaemon(cfg)
+	if err != nil {
+		return nil, false, err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- daemon.Run(ctx)
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case runErr := <-errCh:
+			cancel()
+			if runErr == nil {
+				return nil, false, errors.New("daemon exited unexpectedly")
+			}
+			return nil, false, fmt.Errorf("failed to start daemon: %w", runErr)
+		default:
+		}
+
+		if err := client.Health(); err == nil {
+			return func() {
+				cancel()
+				select {
+				case <-time.After(500 * time.Millisecond):
+				case <-errCh:
+				}
+			}, true, nil
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+
+	cancel()
+	select {
+	case runErr := <-errCh:
+		if runErr != nil {
+			return nil, false, fmt.Errorf("failed to start daemon: %w", runErr)
+		}
+	default:
+	}
+	return nil, false, errors.New("timed out waiting for daemon to start")
+}
+
+func saveDefaultModel(cfg app.Config, model string) error {
+	settings, err := app.LoadSettings(cfg.SettingsFile)
+	if err != nil {
+		return err
+	}
+	settings.DefaultModel = app.CanonicalModelName(model)
+	return app.SaveSettings(cfg.SettingsFile, settings)
+}
+
 func cfgSafeDefaultModel(defaultModel string) string {
 	defaultModel = strings.TrimSpace(defaultModel)
 	if defaultModel == "" {
@@ -401,7 +613,7 @@ func runDoctor(cfg app.Config) error {
 	client := app.NewClient(cfg.ClientBaseURL)
 	if err := client.Health(); err != nil {
 		fmt.Printf("daemon: not reachable (%v)\n", err)
-		fmt.Println("hint: start it with `transcribe daemon run`")
+		fmt.Println("hint: start it with `transcribe daemon run` or use `transcribe run <file>`")
 		return nil
 	}
 	fmt.Println("daemon: healthy")
@@ -478,6 +690,8 @@ func printUsage() {
 	fmt.Println(`transcribe - offline transcription CLI
 
 Commands:
+  init                            Prepare runtime checks and default model
+  run [flags] <file>              One-shot transcription (auto-start daemon)
   setup                           Initialize local state directories
   doctor                          Check local dependencies and daemon health
   daemon run                      Start local queue daemon
