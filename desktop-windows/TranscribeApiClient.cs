@@ -43,7 +43,11 @@ public sealed class TranscribeApiClient : IDisposable
 
     public Task SetDefaultModelAsync(string model, CancellationToken ct) => PostJsonAsync("v1/models/use", new ModelUseRequest { Name = model }, ct);
 
-    public Task InstallModelAsync(string modelPresetName, CancellationToken ct) => PostJsonAsync("v1/models/install", new ModelInstallRequest { Name = modelPresetName }, ct);
+    public Task InstallModelAsync(string modelPresetName, CancellationToken ct) => PostJsonAsync(
+        "v1/models/install",
+        new ModelInstallRequest { Name = modelPresetName },
+        ct,
+        requestTimeout: TimeSpan.FromHours(6));
 
     public Task<JobsResponse> GetJobsAsync(CancellationToken ct) => GetAsync<JobsResponse>("v1/jobs", ct);
 
@@ -67,10 +71,20 @@ public sealed class TranscribeApiClient : IDisposable
         await EnsureSuccessAsync(res, ct).ConfigureAwait(false);
     }
 
-    private async Task PostJsonAsync<TReq>(string path, TReq body, CancellationToken ct)
+    private async Task PostJsonAsync<TReq>(string path, TReq body, CancellationToken ct, TimeSpan? requestTimeout = null)
     {
-        using var res = await _http.PostAsJsonAsync(path, body, JsonOptions, ct).ConfigureAwait(false);
-        await EnsureSuccessAsync(res, ct).ConfigureAwait(false);
+        using var timeoutCts = CreateTimeoutCts(ct, requestTimeout);
+        var effectiveToken = timeoutCts?.Token ?? ct;
+        try
+        {
+            using var res = await _http.PostAsJsonAsync(path, body, JsonOptions, effectiveToken).ConfigureAwait(false);
+            await EnsureSuccessAsync(res, effectiveToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (IsTimeout(timeoutCts, ct))
+        {
+            var label = requestTimeout.HasValue ? requestTimeout.Value.ToString("g") : "configured request timeout";
+            throw new TimeoutException($"Request timed out after {label}");
+        }
     }
 
     private async Task<TRes> PostJsonAsync<TReq, TRes>(string path, TReq body, CancellationToken ct)
@@ -136,5 +150,21 @@ public sealed class TranscribeApiClient : IDisposable
             throw new ArgumentException("Base URL is empty", nameof(url));
         }
         return url.EndsWith("/", StringComparison.Ordinal) ? url : url + "/";
+    }
+
+    private static CancellationTokenSource? CreateTimeoutCts(CancellationToken parent, TimeSpan? requestTimeout)
+    {
+        if (!requestTimeout.HasValue)
+        {
+            return null;
+        }
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(parent);
+        cts.CancelAfter(requestTimeout.Value);
+        return cts;
+    }
+
+    private static bool IsTimeout(CancellationTokenSource? timeoutCts, CancellationToken parent)
+    {
+        return timeoutCts is not null && timeoutCts.IsCancellationRequested && !parent.IsCancellationRequested;
     }
 }

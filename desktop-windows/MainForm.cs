@@ -12,6 +12,18 @@ namespace TranscribeDesktop;
 
 public sealed class MainForm : Form
 {
+    private static readonly Color BackgroundColor = Color.FromArgb(15, 23, 42);
+    private static readonly Color PanelColor = Color.FromArgb(30, 41, 59);
+    private static readonly Color InputColor = Color.FromArgb(51, 65, 85);
+    private static readonly Color TextColor = Color.FromArgb(241, 245, 249);
+    private static readonly Color MutedTextColor = Color.FromArgb(148, 163, 184);
+    private static readonly Color AccentColor = Color.FromArgb(14, 165, 233);
+    private static readonly Color AccentHoverColor = Color.FromArgb(2, 132, 199);
+    private static readonly Color SuccessColor = Color.FromArgb(34, 197, 94);
+    private static readonly Color SuccessHoverColor = Color.FromArgb(22, 163, 74);
+    private static readonly Color NeutralButtonColor = Color.FromArgb(71, 85, 105);
+    private static readonly Color NeutralButtonHoverColor = Color.FromArgb(100, 116, 139);
+
     private readonly DaemonHost _daemon = new();
     private readonly CancellationTokenSource _lifetimeCts = new();
 
@@ -41,6 +53,7 @@ public sealed class MainForm : Form
     private readonly Button _openResultButton = new();
 
     private bool _refreshInProgress;
+    private bool _modelInstallInProgress;
     private List<JobDto> _jobs = new();
 
     public MainForm()
@@ -52,6 +65,7 @@ public sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
 
         InitializeLayout();
+        ApplyTheme();
     }
 
     protected override async void OnShown(EventArgs e)
@@ -97,16 +111,17 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 4,
-            Padding = new Padding(10),
+            Padding = new Padding(14),
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 260));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 290));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         _connectionLabel.Dock = DockStyle.Fill;
-        _connectionLabel.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        _connectionLabel.Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold);
         _connectionLabel.Text = "Initializing...";
+        _connectionLabel.Margin = new Padding(0, 0, 0, 8);
         root.Controls.Add(_connectionLabel, 0, 0);
 
         root.Controls.Add(BuildTopSection(), 0, 1);
@@ -148,6 +163,7 @@ public sealed class MainForm : Form
         _bootstrapList.Dock = DockStyle.Fill;
         _bootstrapList.View = View.Details;
         _bootstrapList.FullRowSelect = true;
+        _bootstrapList.GridLines = true;
         _bootstrapList.Columns.Add("Component", 120);
         _bootstrapList.Columns.Add("Status", 110);
         _bootstrapList.Columns.Add("Message", 220);
@@ -272,6 +288,7 @@ public sealed class MainForm : Form
         _jobsGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _jobsGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _jobsGrid.RowHeadersVisible = false;
+        _jobsGrid.EnableHeadersVisualStyles = false;
 
         _jobsGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ID", DataPropertyName = "Id", FillWeight = 110 });
         _jobsGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", DataPropertyName = "Status", FillWeight = 70 });
@@ -357,22 +374,22 @@ public sealed class MainForm : Form
         if (bootstrap.Ready)
         {
             _bootstrapLabel.Text = "Runtime is ready";
-            _bootstrapLabel.ForeColor = Color.DarkGreen;
+            _bootstrapLabel.ForeColor = Color.FromArgb(74, 222, 128);
         }
         else if (!string.IsNullOrWhiteSpace(bootstrap.Error))
         {
             _bootstrapLabel.Text = "Runtime error: " + bootstrap.Error;
-            _bootstrapLabel.ForeColor = Color.DarkRed;
+            _bootstrapLabel.ForeColor = Color.FromArgb(248, 113, 113);
         }
         else if (bootstrap.InProgress)
         {
             _bootstrapLabel.Text = "Preparing runtime...";
-            _bootstrapLabel.ForeColor = Color.DarkOrange;
+            _bootstrapLabel.ForeColor = Color.FromArgb(251, 191, 36);
         }
         else
         {
             _bootstrapLabel.Text = "Runtime not ready, starting automatic setup...";
-            _bootstrapLabel.ForeColor = Color.DarkOrange;
+            _bootstrapLabel.ForeColor = Color.FromArgb(251, 191, 36);
         }
     }
 
@@ -381,14 +398,14 @@ public sealed class MainForm : Form
         if (!update.Enabled)
         {
             _updateLabel.Text = "Auto-update is disabled";
-            _updateLabel.ForeColor = Color.DimGray;
+            _updateLabel.ForeColor = MutedTextColor;
             return;
         }
 
         if (!string.IsNullOrWhiteSpace(update.Error))
         {
             _updateLabel.Text = "Update error: " + update.Error;
-            _updateLabel.ForeColor = Color.DarkRed;
+            _updateLabel.ForeColor = Color.FromArgb(248, 113, 113);
             return;
         }
 
@@ -407,7 +424,7 @@ public sealed class MainForm : Form
         }
 
         _updateLabel.Text = parts.Count == 0 ? "No update data yet" : string.Join(" | ", parts);
-        _updateLabel.ForeColor = update.UpdateAvailable ? Color.DarkOrange : Color.DarkGreen;
+        _updateLabel.ForeColor = update.UpdateAvailable ? Color.FromArgb(251, 191, 36) : Color.FromArgb(74, 222, 128);
     }
 
     private void UpdateModelsUi(ModelsResponse models, bool runtimeReady)
@@ -456,7 +473,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        _installModelButton.Enabled = true;
+        _installModelButton.Enabled = !_modelInstallInProgress;
         if (!string.IsNullOrWhiteSpace(selectedName))
         {
             foreach (var item in _presetModels.Items)
@@ -581,6 +598,10 @@ public sealed class MainForm : Form
         {
             return;
         }
+        if (_modelInstallInProgress)
+        {
+            return;
+        }
 
         if (_presetModels.SelectedItem is not PresetItem preset)
         {
@@ -589,7 +610,10 @@ public sealed class MainForm : Form
 
         try
         {
-            SetStatus("Downloading model: " + preset.Name);
+            _modelInstallInProgress = true;
+            _installModelButton.Enabled = false;
+            UseWaitCursor = true;
+            SetStatus("Downloading model (can take several minutes): " + preset.Name);
             await _api.InstallModelAsync(preset.Name, _lifetimeCts.Token);
             await RefreshAllAsync(force: true);
             SetStatus("Model installed: " + preset.Name);
@@ -597,6 +621,12 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             SetStatus("Model install error: " + ex.Message, isError: true);
+        }
+        finally
+        {
+            _modelInstallInProgress = false;
+            UseWaitCursor = false;
+            _installModelButton.Enabled = _presetModels.Items.Count > 0;
         }
     }
 
@@ -729,7 +759,104 @@ public sealed class MainForm : Form
     private void SetStatus(string text, bool isError = false)
     {
         _status.Text = text;
-        _status.ForeColor = isError ? Color.DarkRed : Color.Black;
+        _status.ForeColor = isError ? Color.FromArgb(248, 113, 113) : TextColor;
+    }
+
+    private void ApplyTheme()
+    {
+        Font = new Font("Segoe UI", 9.5F, FontStyle.Regular, GraphicsUnit.Point);
+        BackColor = BackgroundColor;
+        ForeColor = TextColor;
+
+        ApplyThemeRecursive(this);
+        _connectionLabel.ForeColor = TextColor;
+        _defaultModelLabel.ForeColor = TextColor;
+        _modelsDirLabel.ForeColor = TextColor;
+
+        ConfigureButton(_addFilesButton, AccentColor, AccentHoverColor);
+        ConfigureButton(_installModelButton, SuccessColor, SuccessHoverColor);
+        ConfigureButton(_setDefaultButton, NeutralButtonColor, NeutralButtonHoverColor);
+        ConfigureButton(_checkUpdatesButton, NeutralButtonColor, NeutralButtonHoverColor);
+        ConfigureButton(_refreshButton, NeutralButtonColor, NeutralButtonHoverColor);
+        ConfigureButton(_cancelJobButton, NeutralButtonColor, NeutralButtonHoverColor);
+        ConfigureButton(_retryJobButton, NeutralButtonColor, NeutralButtonHoverColor);
+        ConfigureButton(_openResultButton, NeutralButtonColor, NeutralButtonHoverColor);
+
+        _jobsGrid.BackgroundColor = PanelColor;
+        _jobsGrid.BorderStyle = BorderStyle.None;
+        _jobsGrid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+        _jobsGrid.ColumnHeadersDefaultCellStyle.BackColor = InputColor;
+        _jobsGrid.ColumnHeadersDefaultCellStyle.ForeColor = TextColor;
+        _jobsGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = InputColor;
+        _jobsGrid.ColumnHeadersDefaultCellStyle.SelectionForeColor = TextColor;
+        _jobsGrid.DefaultCellStyle.BackColor = PanelColor;
+        _jobsGrid.DefaultCellStyle.ForeColor = TextColor;
+        _jobsGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(3, 105, 161);
+        _jobsGrid.DefaultCellStyle.SelectionForeColor = Color.White;
+        _jobsGrid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(34, 49, 76);
+        _jobsGrid.GridColor = InputColor;
+
+        _bootstrapList.BorderStyle = BorderStyle.None;
+        _bootstrapList.BackColor = PanelColor;
+        _bootstrapList.ForeColor = TextColor;
+
+        if (Controls.OfType<StatusStrip>().FirstOrDefault() is StatusStrip strip)
+        {
+            strip.BackColor = PanelColor;
+            strip.ForeColor = TextColor;
+        }
+    }
+
+    private void ApplyThemeRecursive(Control control)
+    {
+        switch (control)
+        {
+            case GroupBox box:
+                box.BackColor = PanelColor;
+                box.ForeColor = TextColor;
+                break;
+            case TableLayoutPanel table:
+                table.BackColor = table.Parent is GroupBox ? PanelColor : BackgroundColor;
+                table.ForeColor = TextColor;
+                break;
+            case FlowLayoutPanel flow:
+                flow.BackColor = PanelColor;
+                flow.ForeColor = TextColor;
+                break;
+            case Label label:
+                label.ForeColor = MutedTextColor;
+                break;
+            case TextBox textBox:
+                textBox.BackColor = InputColor;
+                textBox.ForeColor = TextColor;
+                textBox.BorderStyle = BorderStyle.FixedSingle;
+                break;
+            case ComboBox combo:
+                combo.FlatStyle = FlatStyle.Flat;
+                combo.BackColor = InputColor;
+                combo.ForeColor = TextColor;
+                break;
+            case StatusStrip strip:
+                strip.BackColor = PanelColor;
+                strip.ForeColor = TextColor;
+                break;
+        }
+
+        foreach (Control child in control.Controls)
+        {
+            ApplyThemeRecursive(child);
+        }
+    }
+
+    private static void ConfigureButton(Button button, Color baseColor, Color hoverColor)
+    {
+        button.FlatStyle = FlatStyle.Flat;
+        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = hoverColor;
+        button.FlatAppearance.MouseDownBackColor = hoverColor;
+        button.BackColor = baseColor;
+        button.ForeColor = Color.White;
+        button.Padding = new Padding(8, 6, 8, 6);
     }
 
     private static void ReplaceComboItems(ComboBox combo, List<string> values, string? preferred, bool allowCustomText = false)
