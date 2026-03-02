@@ -33,6 +33,8 @@ func main() {
 		err = runInit(cfg, os.Args[2:])
 	case "run":
 		err = runRun(cfg, os.Args[2:])
+	case "gui":
+		err = runGUI(cfg, os.Args[2:])
 	case "daemon":
 		err = runDaemon(cfg, os.Args[2:])
 	case "queue":
@@ -187,6 +189,40 @@ func runRun(cfg app.Config, args []string) error {
 		return nil
 	}
 	return watchJob(client, job.ID, watchInterval)
+}
+
+func runGUI(cfg app.Config, args []string) error {
+	fs := flag.NewFlagSet("gui", flag.ContinueOnError)
+	openBrowser := fs.Bool("open", true, "open UI in default browser")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	stopDaemon, startedDaemon, err := ensureDaemonRunning(cfg)
+	if err != nil {
+		return err
+	}
+
+	uiURL := cfg.ClientBaseURL + "/"
+	fmt.Printf("GUI URL: %s\n", uiURL)
+	if *openBrowser {
+		if err := openURL(uiURL); err != nil {
+			fmt.Printf("Could not auto-open browser: %v\n", err)
+			fmt.Println("Open the URL manually in your browser.")
+		}
+	}
+
+	if !startedDaemon {
+		fmt.Println("Daemon is already running. Press Ctrl+C to exit.")
+	} else {
+		fmt.Println("Started local daemon for GUI. Press Ctrl+C to stop.")
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+	stopDaemon()
+	return nil
 }
 
 func runQueue(cfg app.Config, args []string) error {
@@ -586,6 +622,8 @@ func runSetup(cfg app.Config) error {
 	fmt.Printf("State directory: %s\n", cfg.StateDir)
 	fmt.Printf("Settings file: %s\n", cfg.SettingsFile)
 	fmt.Printf("Models directory: %s\n", cfg.ModelsDir)
+	fmt.Printf("Uploads directory: %s\n", cfg.UploadsDir)
+	fmt.Printf("Outputs directory: %s\n", cfg.OutputsDir)
 	fmt.Printf("Daemon address: %s\n", cfg.Addr)
 	fmt.Printf("Default model: %s\n", cfg.DefaultModel)
 	fmt.Println("Setup complete.")
@@ -600,6 +638,8 @@ func runDoctor(cfg app.Config) error {
 	fmt.Printf("State: %s\n", cfg.StateDir)
 	fmt.Printf("Settings: %s\n", cfg.SettingsFile)
 	fmt.Printf("Models: %s\n", cfg.ModelsDir)
+	fmt.Printf("Uploads: %s\n", cfg.UploadsDir)
+	fmt.Printf("Outputs: %s\n", cfg.OutputsDir)
 	fmt.Printf("Default model: %s\n", cfg.DefaultModel)
 	if path, err := app.ResolveModelPath(cfg, ""); err != nil {
 		fmt.Printf("default model: missing (%v)\n", err)
@@ -627,6 +667,19 @@ func checkBinary(binary, name string) {
 		return
 	}
 	fmt.Printf("%s: ok (%s)\n", name, path)
+}
+
+func openURL(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	return cmd.Start()
 }
 
 func watchJob(client *app.Client, jobID string, interval time.Duration) error {
@@ -687,11 +740,12 @@ func humanSize(n int64) string {
 }
 
 func printUsage() {
-	fmt.Println(`transcribe - offline transcription CLI
+	fmt.Print(`transcribe - offline transcription CLI
 
 Commands:
   init                            Prepare runtime checks and default model
   run [flags] <file>              One-shot transcription (auto-start daemon)
+  gui [--open]                    Launch local web UI for queue and models
   setup                           Initialize local state directories
   doctor                          Check local dependencies and daemon health
   daemon run                      Start local queue daemon

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -73,9 +74,16 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.enqueuePending(ctx)
 
 	mux := http.NewServeMux()
+	d.registerUIRoutes(mux)
 	mux.HandleFunc("/healthz", d.handleHealth)
 	mux.HandleFunc("/v1/jobs", d.handleJobs)
 	mux.HandleFunc("/v1/jobs/", d.handleJobPath)
+	mux.HandleFunc("/v1/jobs/upload", d.handleUploadJob)
+	mux.HandleFunc("/v1/models", d.handleModels)
+	mux.HandleFunc("/v1/models/presets", d.handleModelPresets)
+	mux.HandleFunc("/v1/models/install", d.handleModelInstall)
+	mux.HandleFunc("/v1/models/use", d.handleModelUse)
+	mux.HandleFunc("/v1/models/remove", d.handleModelRemove)
 
 	server := &http.Server{
 		Addr:              d.cfg.Addr,
@@ -145,32 +153,95 @@ func (d *Daemon) handleAddJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	absPath, err := filepath.Abs(req.FilePath)
+	job, err := d.createAndQueueJob(req.FilePath, req.Language, req.Model, req.OutputDir)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid file path"})
+		writeJSON(w, statusFromError(err), map[string]string{"error": err.Error()})
 		return
 	}
-	info, err := os.Stat(absPath)
-	if err != nil || info.IsDir() {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file does not exist or is a directory"})
+	writeJSON(w, http.StatusAccepted, job)
+}
+
+func (d *Daemon) handleUploadJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	// Keep only a small multipart buffer in memory; large uploads go to temp files.
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid multipart payload"})
 		return
 	}
 
-	language := strings.TrimSpace(req.Language)
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file is required"})
+		return
+	}
+	defer file.Close()
+
+	safeName := filepath.Base(strings.TrimSpace(header.Filename))
+	if safeName == "" || safeName == "." || safeName == string(os.PathSeparator) {
+		safeName = "upload.bin"
+	}
+	dstPath := filepath.Join(d.cfg.UploadsDir, makeID()+"-"+safeName)
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create upload file"})
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		_ = os.Remove(dstPath)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save upload"})
+		return
+	}
+
+	language := r.FormValue("language")
+	model := r.FormValue("model")
+	outputDir := strings.TrimSpace(r.FormValue("outputDir"))
+	if outputDir == "" {
+		outputDir = d.cfg.OutputsDir
+	}
+
+	job, err := d.createAndQueueJob(dstPath, language, model, outputDir)
+	if err != nil {
+		_ = os.Remove(dstPath)
+		writeJSON(w, statusFromError(err), map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, job)
+}
+
+func (d *Daemon) createAndQueueJob(filePath, language, model, outputDir string) (*Job, error) {
+	absPath, err := filepath.Abs(strings.TrimSpace(filePath))
+	if err != nil {
+		return nil, fmt.Errorf("invalid file path")
+	}
+	info, err := os.Stat(absPath)
+	if err != nil || info.IsDir() {
+		return nil, fmt.Errorf("file does not exist or is a directory")
+	}
+
+	language = strings.TrimSpace(language)
 	if language == "" {
 		language = "auto"
 	}
-	model := strings.TrimSpace(req.Model)
+
+	model = strings.TrimSpace(model)
 	if model == "" {
 		model = d.cfg.DefaultModel
 	}
-	outputDir := strings.TrimSpace(req.OutputDir)
+	if !filepath.IsAbs(model) && !strings.ContainsRune(model, os.PathSeparator) {
+		model = CanonicalModelName(model)
+	}
+
+	outputDir = strings.TrimSpace(outputDir)
 	if outputDir == "" {
 		outputDir = filepath.Dir(absPath)
 	}
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid outputDir"})
-		return
+		return nil, fmt.Errorf("invalid outputDir")
 	}
 
 	now := time.Now().UTC()
@@ -188,23 +259,21 @@ func (d *Daemon) handleAddJob(w http.ResponseWriter, r *http.Request) {
 
 	snapshot, err := d.insertJob(job)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+		return nil, err
 	}
 	if err := d.store.Save(snapshot); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+		return nil, err
 	}
 
 	select {
 	case d.queue <- job.ID:
-		writeJSON(w, http.StatusAccepted, job)
+		return job, nil
 	default:
 		snapshot, _ := d.failJob(job.ID, "queue is full")
 		if snapshot != nil {
 			_ = d.store.Save(snapshot)
 		}
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "queue is full"})
+		return nil, errQueueFull
 	}
 }
 
@@ -237,6 +306,10 @@ func (d *Daemon) handleJobPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(parts) == 3 && parts[1] == "result" && r.Method == http.MethodGet {
+		d.handleJobResultFile(w, r, jobID, strings.TrimSpace(parts[2]))
+		return
+	}
 	if len(parts) != 2 || r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -261,6 +334,151 @@ func (d *Daemon) handleJobPath(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown action"})
 	}
+}
+
+func (d *Daemon) handleJobResultFile(w http.ResponseWriter, r *http.Request, jobID, format string) {
+	job, ok := d.GetJob(jobID)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "job not found"})
+		return
+	}
+	if job.Status != StatusCompleted {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "job is not completed"})
+		return
+	}
+
+	var path string
+	switch format {
+	case "txt":
+		path = job.ResultText
+	case "srt":
+		path = job.ResultSRT
+	case "vtt":
+		path = job.ResultVTT
+	default:
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown result format"})
+		return
+	}
+	if strings.TrimSpace(path) == "" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "result file is not available"})
+		return
+	}
+	w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(path))
+	http.ServeFile(w, r, path)
+}
+
+func (d *Daemon) handleModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	models, err := ListModels(d.cfg)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	type modelView struct {
+		Name      string `json:"name"`
+		Path      string `json:"path"`
+		SizeBytes int64  `json:"sizeBytes"`
+	}
+	items := make([]modelView, 0, len(models))
+	for _, m := range models {
+		items = append(items, modelView{Name: m.Name, Path: m.Path, SizeBytes: m.SizeBytes})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"defaultModel": d.cfg.DefaultModel,
+		"modelsDir":    d.cfg.ModelsDir,
+		"models":       items,
+	})
+}
+
+func (d *Daemon) handleModelPresets(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"presets": ListPresetModels()})
+}
+
+func (d *Daemon) handleModelInstall(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	defer r.Body.Close()
+
+	var req ModelInstallRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	path, err := InstallModel(d.cfg, req.Name, req.URL, nil)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"path": path})
+}
+
+func (d *Daemon) handleModelUse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	defer r.Body.Close()
+
+	var req ModelUseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	model := strings.TrimSpace(req.Name)
+	if model == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+		return
+	}
+	if !filepath.IsAbs(model) && !strings.ContainsRune(model, os.PathSeparator) {
+		model = CanonicalModelName(model)
+	}
+
+	settings, err := LoadSettings(d.cfg.SettingsFile)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	settings.DefaultModel = model
+	if err := SaveSettings(d.cfg.SettingsFile, settings); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	d.cfg.DefaultModel = model
+	writeJSON(w, http.StatusOK, map[string]string{"defaultModel": model})
+}
+
+func (d *Daemon) handleModelRemove(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	defer r.Body.Close()
+
+	var req ModelUseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	if err := RemoveModel(d.cfg, req.Name); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"removed": CanonicalModelName(req.Name)})
 }
 
 func statusFromError(err error) int {

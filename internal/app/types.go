@@ -38,3 +38,14 @@ type AddJobRequest struct {
 	Language  string `json:"language"`
 	Model     string `json:"model"`
 }
+
+// ModelUseRequest updates default model in settings.
+type ModelUseRequest struct {
+	Name string `json:"name"`
+}
+
+// ModelInstallRequest installs a model from preset or URL.
+type ModelInstallRequest struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}

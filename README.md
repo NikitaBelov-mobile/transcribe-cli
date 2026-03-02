@@ -4,6 +4,7 @@ Offline CLI tool for audio/video transcription on macOS and Windows.
 
 - Full local processing (no server required)
 - Simple one-shot mode: `init` + `run`
+- Local GUI mode: `gui` (browser UI for files/queue/models)
 - Advanced queue mode with progress/cancel/retry
 - Model management via `model presets/current/use/install/remove`
 - Outputs: `txt`, `srt`, `vtt`
@@ -43,6 +44,23 @@ transcribe run ./sample.mp4 --lang ru --model ggml-base
 
 `run` waits for completion and prints output file paths.
 
+## GUI mode
+
+Start local web UI:
+
+```bash
+transcribe gui
+```
+
+This opens `http://127.0.0.1:9864/` (or your configured address) where you can:
+
+- choose or download models
+- set default model
+- upload audio/video files
+- see queue progress
+- cancel/retry jobs
+- download `txt/srt/vtt` results
+
 ## Advanced queue flow
 
 1. Start daemon manually:
@@ -75,6 +93,7 @@ transcribe queue retry <job-id>
 ```bash
 transcribe init [--model ggml-base] [--skip-model]
 transcribe run [--lang auto] [--model ggml-base] [--output-dir ./out] [--no-watch] [--interval 2s] <file>
+transcribe gui [--open]
 
 transcribe setup
 transcribe doctor

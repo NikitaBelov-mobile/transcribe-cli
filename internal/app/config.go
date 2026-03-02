@@ -17,6 +17,8 @@ type Config struct {
 	JobsFile      string
 	SettingsFile  string
 	ModelsDir     string
+	UploadsDir    string
+	OutputsDir    string
 	DefaultModel  string
 	FFmpegBinary  string
 	WhisperBinary string
@@ -47,6 +49,8 @@ func LoadConfig() Config {
 		JobsFile:      filepath.Join(stateDir, "jobs.json"),
 		SettingsFile:  settingsFile,
 		ModelsDir:     getEnv("TRANSCRIBE_CLI_MODELS_DIR", modelsDir),
+		UploadsDir:    filepath.Join(stateDir, "uploads"),
+		OutputsDir:    filepath.Join(stateDir, "outputs"),
 		DefaultModel:  CanonicalModelName(defaultModel),
 		FFmpegBinary:  getEnv("TRANSCRIBE_CLI_FFMPEG", "ffmpeg"),
 		WhisperBinary: getEnv("TRANSCRIBE_CLI_WHISPER", "whisper-cli"),
@@ -66,6 +70,12 @@ func EnsureStateDirs(cfg Config) error {
 		return err
 	}
 	if err := os.MkdirAll(cfg.ModelsDir, 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(cfg.UploadsDir, 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(cfg.OutputsDir, 0o755); err != nil {
 		return err
 	}
 	return nil
