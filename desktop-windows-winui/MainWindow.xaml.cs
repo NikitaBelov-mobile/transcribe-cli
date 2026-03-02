@@ -83,7 +83,8 @@ public sealed partial class MainWindow : Window
             {
                 IsOnboardingMode = true;
                 RootNav.IsEnabled = false;
-                RootNav.IsPaneVisible = false;
+                RootNav.IsPaneOpen = false;
+                RootNav.IsPaneToggleButtonVisible = false;
                 MainFrame.Navigate(typeof(OnboardingWelcomePage));
                 SetStatus("Onboarding required: go through data sharing, runtime setup, and model preparation.");
                 return;
@@ -91,7 +92,7 @@ public sealed partial class MainWindow : Window
 
             IsOnboardingMode = false;
             RootNav.IsEnabled = true;
-            RootNav.IsPaneVisible = true;
+            RootNav.IsPaneToggleButtonVisible = true;
             RootNav.SelectedItem = RootNav.MenuItems[0];
             MainFrame.Navigate(typeof(DashboardPage));
             SetStatus("Ready.");
@@ -99,7 +100,8 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             RootNav.IsEnabled = false;
-            RootNav.IsPaneVisible = false;
+            RootNav.IsPaneOpen = false;
+            RootNav.IsPaneToggleButtonVisible = false;
             MainFrame.Navigate(typeof(ErrorPage), ex.Message);
             SetStatus($"Startup error: {ex.Message}", isError: true);
         }

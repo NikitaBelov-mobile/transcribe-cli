@@ -19,21 +19,18 @@
                 <Setter Property="Background" Value="{StaticResource AccentPrimaryBrush}" />
                 <Setter Property="Foreground" Value="White" />
                 <Setter Property="Padding" Value="14,8" />
-                <Setter Property="CornerRadius" Value="8" />
             </Style>
 
             <Style TargetType="TextBox">
                 <Setter Property="Background" Value="#FF334155" />
                 <Setter Property="Foreground" Value="{StaticResource AppTextBrush}" />
                 <Setter Property="BorderBrush" Value="#FF475569" />
-                <Setter Property="CornerRadius" Value="8" />
             </Style>
 
             <Style TargetType="ComboBox">
                 <Setter Property="Background" Value="#FF334155" />
                 <Setter Property="Foreground" Value="{StaticResource AppTextBrush}" />
                 <Setter Property="BorderBrush" Value="#FF475569" />
-                <Setter Property="CornerRadius" Value="8" />
             </Style>
 
             <Style TargetType="ListView">
