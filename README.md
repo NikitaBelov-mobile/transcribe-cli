@@ -258,4 +258,26 @@ Required GitHub repo config:
   - `WINGET_PACKAGE_ID` (optional, e.g. `YourOrg.TranscribeCLI`)
 - Secrets:
   - `HOMEBREW_TAP_TOKEN` (optional)
+
+## Makefile Tasks
+
+For local automation use:
+
+```bash
+make help
+make check
+make build-cli-all
+make build-desktop-win
+```
+
+Git/release helpers:
+
+```bash
+make git-commit MSG="your commit message"
+make git-push
+make git-tag TAG=v0.3.11
+make git-push-tag TAG=v0.3.11
+# or one-shot:
+make release-tag TAG=v0.3.11
+```
   - `WINGET_REPO_TOKEN` (optional)

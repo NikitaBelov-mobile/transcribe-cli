@@ -3,6 +3,7 @@ dist/
 !cmd/transcribe-desktop/frontend/dist/
 !cmd/transcribe-desktop/frontend/dist/index.html
 .cache/
+.gocache/
 .state/
 *.exe
 *.zip
