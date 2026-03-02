@@ -87,10 +87,19 @@ jobs:
           Compress-Archive -Path dist-desktop/transcribe-desktop.exe -DestinationPath dist-desktop/transcribe-desktop_${{ github.ref_name }}_windows_amd64.zip
 
       - name: Upload desktop artifact to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            dist-desktop/transcribe-desktop_${{ github.ref_name }}_windows_amd64.zip
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          asset="dist-desktop/transcribe-desktop_${GITHUB_REF_NAME}_windows_amd64.zip"
+          # Retry upload to handle transient GitHub API "Unicorn" failures.
+          for i in 1 2 3; do
+            if gh release upload "${GITHUB_REF_NAME}" "${asset}" --clobber; then
+              exit 0
+            fi
+            echo "Upload attempt ${i} failed, retrying..."
+            sleep 5
+          done
+          echo "Failed to upload desktop artifact after retries."
+          exit 1
